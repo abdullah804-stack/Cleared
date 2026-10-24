@@ -193,22 +193,33 @@ export function useAgent(opts: UseAgentOptions) {
           return;
         }
 
-        // Extract content from OpenRouter response
+                // Extract content from OpenRouter response
         const content: string | undefined = body?.choices?.[0]?.message?.content;
         if (!content) {
-          dispatch({ type: "PLAN_FAILED", reason: "Empty response from planner" });
-          audit("plan.failed", "Empty response from planner");
+          const rawError = JSON.stringify(body).slice(0, 150); // Show first 150 chars of error
+          dispatch({ type: "PLAN_FAILED", reason: `Planner empty: ${rawError}` });
+          audit("plan.failed", `Empty response. Raw: ${rawError}`);
           return;
         }
 
-        // Strip markdown fences if the model added them despite the prompt
-        const cleaned = content.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
+                // Aggressive extraction: Find the first '{' and the last '}' 
+        // This strips out any "Here is your plan:" text or markdown fences.
+        const firstBrace = content.indexOf("{");
+        const lastBrace = content.lastIndexOf("}");
+        
+        if (firstBrace === -1 || lastBrace === -1) {
+          dispatch({ type: "PLAN_FAILED", reason: "Planner did not return a JSON object" });
+          audit("plan.failed", "No JSON braces found", { raw: content.slice(0, 200) });
+          return;
+        }
 
-        let parsed: unknown;
+        const cleanJson = content.substring(firstBrace, lastBrace + 1);
+
+        let parsed: any;
         try {
-          parsed = JSON.parse(cleaned);
-        } catch {
-          dispatch({ type: "PLAN_FAILED", reason: "Planner returned invalid JSON" });
+          parsed = JSON.parse(cleanJson);
+        } catch (e: any) {
+          dispatch({ type: "PLAN_FAILED", reason: `Invalid JSON: ${e.message}` });
           audit("plan.failed", "Planner returned invalid JSON", { raw: content.slice(0, 200) });
           return;
         }
