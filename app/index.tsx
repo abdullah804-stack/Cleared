@@ -1,6 +1,6 @@
 // app/index.tsx
 import { useState, useEffect } from "react";
-import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
+import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
@@ -9,10 +9,12 @@ import { TriageWidget } from "../components/TriageWidget";
 import { colors, radius, spacing } from "../constants/theme";
 import { useAuth, supabase } from "../contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 export default function HomeScreen() {
   const [input, setInput] = useState("");
   const [recentVisits, setRecentVisits] = useState<any[]>([]);
+  const [isListening, setIsListening] = useState(false);
   const router = useRouter();
   const { user } = useAuth();
 
@@ -29,6 +31,31 @@ export default function HomeScreen() {
     }
     fetchHistory();
   }, [user]);
+
+  // VOICE RECOGNITION HOOKS
+  useSpeechRecognitionEvent("start", () => setIsListening(true));
+  useSpeechRecognitionEvent("end", () => setIsListening(false));
+  useSpeechRecognitionEvent("result", (event) => {
+    setInput(event.results[0]?.transcript || "");
+  });
+  useSpeechRecognitionEvent("error", (event) => {
+    Alert.alert("Voice Error", event.error);
+    setIsListening(false);
+  });
+
+  const toggleListening = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+    } else {
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!result.granted) {
+        Alert.alert("Permission Denied", "Microphone access is required for voice input.");
+        return;
+      }
+      ExpoSpeechRecognitionModule.start({ lang: "en-US", interimResults: true });
+    }
+  };
 
   const handlePlan = (customPrompt?: string) => {
     const textToSubmit = customPrompt || input;
@@ -49,7 +76,6 @@ export default function HomeScreen() {
             <Text style={styles.title}>What do you need today?</Text>
           </View>
 
-          {/* NEW FEATURE: VISUAL TRIAGE WIDGET */}
           <TriageWidget onComplete={(prompt) => handlePlan(prompt)} />
 
           <Text style={styles.orDivider}>OR DESCRIBE IT YOURSELF</Text>
@@ -64,6 +90,13 @@ export default function HomeScreen() {
               onChangeText={setInput}
               textAlignVertical="top"
             />
+            {/* NEW MIC BUTTON */}
+            <Pressable 
+              style={[styles.micButton, isListening && styles.micButtonActive]} 
+              onPress={toggleListening}
+            >
+              <Ionicons name={isListening ? "stop" : "mic"} size={22} color={isListening ? "#FFF" : colors.accent} />
+            </Pressable>
           </View>
 
           <Button title="Generate Custom Plan" onPress={() => handlePlan()} disabled={!input.trim()} />
@@ -111,7 +144,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
     padding: spacing.md, minHeight: 100, marginBottom: spacing.md,
   },
-  input: { flex: 1, fontSize: 16, color: colors.text, lineHeight: 24 },
+  input: { flex: 1, fontSize: 16, color: colors.text, lineHeight: 24, paddingRight: 40 },
+  micButton: { position: "absolute", bottom: spacing.md, right: spacing.md, width: 44, height: 44, borderRadius: 22, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" },
+  micButtonActive: { backgroundColor: colors.danger },
   sectionTitle: { fontSize: 16, fontWeight: "600", color: colors.text, marginBottom: spacing.sm },
   historyContainer: { gap: spacing.sm },
   historyCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },

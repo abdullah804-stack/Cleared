@@ -10,26 +10,21 @@ export function SkeletonLoader() {
 
   useEffect(() => {
     opacity.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 800 }),
-        withTiming(0.4, { duration: 800 })
-      ),
+      withSequence(withTiming(1, { duration: 800 }), withTiming(0.4, { duration: 800 })),
       -1,
       true
     );
   }, []);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Ionicons name="sparkles" size={24} color={colors.accent} />
-        <Text style={styles.title}>Agent is thinking...</Text>
+        <Text style={styles.title}>Analyzing symptoms...</Text>
       </View>
-      <Text style={styles.subtitle}>Breaking down your request and selecting tools.</Text>
+      <Text style={styles.subtitle}>Building your step-by-step action plan.</Text>
 
       <View style={styles.cardList}>
         {[1, 2, 3].map((i) => (

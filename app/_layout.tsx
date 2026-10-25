@@ -1,10 +1,11 @@
 // app/_layout.tsx
 import { useEffect } from "react";
-import { Slot, Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
 import { initAuditDb } from "../shared/audit";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import { BiometricGate } from "../components/BiometricGate";
 import { colors } from "../constants/theme";
 
 function RootLayoutNav() {
@@ -14,14 +15,11 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (loading) return;
-
     const inAuthGroup = segments[0] === "(auth)";
 
     if (!user && !inAuthGroup) {
-      // Redirect to login if not authenticated
       router.replace("/(auth)/login");
     } else if (user && inAuthGroup) {
-      // Redirect to home if authenticated
       router.replace("/");
     }
   }, [user, loading, segments]);
@@ -41,6 +39,7 @@ function RootLayoutNav() {
       <Stack.Screen name="plan" options={{ title: "Plan", headerBackTitle: "Back" }} />
       <Stack.Screen name="audit" options={{ title: "Audit Log" }} />
       <Stack.Screen name="appointment" options={{ title: "Appointment", headerBackVisible: false }} />
+      <Stack.Screen name="emergency" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -52,8 +51,10 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <RootLayoutNav />
+      <BiometricGate>
+        <StatusBar style="auto" />
+        <RootLayoutNav />
+      </BiometricGate>
     </AuthProvider>
   );
 }

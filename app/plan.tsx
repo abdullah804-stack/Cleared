@@ -29,19 +29,17 @@ export default function PlanScreen() {
   const userId = user?.id || "demo-user-123";
   
   const [triageResult, setTriageResult] = useState<any>(null);
-  const [checklist, setChecklist] = useState<string[]>([]);
-  const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
 
-  const { state, plan, approve, reject, skip, executeCurrent } = useAgent({
+  const { state, plan, approve, reject, skip, retry, executeCurrent, removeStep } = useAgent({
     planEndpoint: "https://gevnakyvjxvnzasruzwh.supabase.co/functions/v1/plan",
     anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU",
     userId,
+    userEmail: user?.email,
     onAudit: async (entry) => {
       await writeAudit(userId, entry.type, entry.description, entry.detail);
     },
   });
 
-  // Extract outputs from the tools as they succeed
   useEffect(() => {
     if (state.status === "COMPLETED" || state.status === "EXECUTING" || state.status === "STEP_FAILED") {
       state.results.forEach((result, index) => {
@@ -49,9 +47,6 @@ export default function PlanScreen() {
           const step = state.plan[index];
           if (step.tool === "analyze_symptoms" && !triageResult) {
             setTriageResult(JSON.parse(result.output));
-          }
-          if (step.tool === "prepare_visit_checklist" && checklist.length === 0) {
-            setChecklist(JSON.parse(result.output));
           }
         }
       });
@@ -93,6 +88,8 @@ export default function PlanScreen() {
       }
     }
 
+    const isEditing = state.status === "AWAITING_APPROVAL";
+
     return (
       <Animated.View 
         key={step.id} 
@@ -106,7 +103,14 @@ export default function PlanScreen() {
           <View style={styles.stepTextContainer}>
             <Text style={styles.stepDescription}>{step.description}</Text>
             <Text style={[styles.stepMeta, { color: iconColor }]}>{statusText}</Text>
+            {/* NEW: The "Why" Reasoning */}
+            <Text style={styles.stepImpact}>Why: {step.estimatedImpact}</Text>
           </View>
+          {isEditing && (
+            <Pressable onPress={() => removeStep(step.id)} style={styles.deleteBtn}>
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            </Pressable>
+          )}
         </View>
       </Animated.View>
     );
@@ -121,7 +125,6 @@ export default function PlanScreen() {
         {(state.status === "AWAITING_APPROVAL" || state.status === "EXECUTING" || state.status === "STEP_FAILED" || state.status === "COMPLETED") && (
           <View style={styles.planContainer}>
             
-            {/* MAGIC FEATURE 1: TRIAGE CARD */}
             {triageResult && (
               <Animated.View entering={FadeInDown} style={styles.triageCard}>
                 <View style={styles.triageHeader}>
@@ -130,44 +133,13 @@ export default function PlanScreen() {
                 </View>
                 <Text style={styles.triageUrgency}>Urgency: {triageResult.urgency.toUpperCase()}</Text>
                 <Text style={styles.triageNote}>Treatment: {triageResult.treatment_type.replace('_', ' ')}</Text>
-                <View style={styles.disclaimerBadge}>
-                  <Text style={styles.disclaimerText}>AI suggestive only · Not medical advice</Text>
-                </View>
               </Animated.View>
             )}
 
-            <Text style={styles.sectionTitle}>Agent Trace</Text>
+            <Text style={styles.sectionTitle}>{state.status === "AWAITING_APPROVAL" ? "Review Plan (Tap trash to remove)" : "Agent Trace"}</Text>
             <View style={styles.stepsList}>
               {state.plan.map((step, i) => renderStep(step, i))}
             </View>
-
-            {/* MAGIC FEATURE 2: INTERACTIVE CHECKLIST */}
-            {checklist.length > 0 && (
-              <Animated.View entering={FadeInUp.delay(300)} style={styles.checklistContainer}>
-                <Text style={styles.sectionTitle}>Pre-Visit Checklist</Text>
-                <View style={styles.checklistCard}>
-                  {checklist.map((item, idx) => (
-                    <Pressable 
-                      key={idx} 
-                      style={styles.checkItem}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setCheckedItems(prev => ({ ...prev, [idx]: !prev[idx] }));
-                      }}
-                    >
-                      <Ionicons 
-                        name={checkedItems[idx] ? "checkbox" : "square-outline"} 
-                        size={24} 
-                        color={checkedItems[idx] ? colors.accent : colors.border} 
-                      />
-                      <Text style={[styles.checkText, checkedItems[idx] && styles.checkTextDone]}>
-                        {item}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </Animated.View>
-            )}
           </View>
         )}
       </ScrollView>
@@ -180,10 +152,15 @@ export default function PlanScreen() {
           </View>
         )}
         {state.status === "EXECUTING" && <Button title="Executing tools..." disabled onPress={() => {}} />}
+        
+        {/* NEW: Smarter Error Recovery Footer */}
         {state.status === "STEP_FAILED" && (
-          <View style={styles.row}>
-            <Button title="Abort" variant="danger" onPress={() => router.back()} style={styles.flexButton} />
-            <Button title="Skip & Continue" onPress={skip} style={styles.flexButton} />
+          <View style={styles.errorFooter}>
+            <View style={styles.row}>
+              <Button title="Abort" variant="danger" onPress={() => router.back()} style={styles.flexButton} />
+              <Button title="Retry Step" onPress={retry} style={styles.flexButton} />
+            </View>
+            <Button title="Skip & Continue" variant="ghost" onPress={skip} style={{ marginTop: spacing.sm }} />
           </View>
         )}
       </Animated.View>
@@ -192,35 +169,26 @@ export default function PlanScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flexGrow: 1, paddingBottom: 120 },
+  scroll: { flexGrow: 1, paddingBottom: 160 },
   planContainer: { marginTop: spacing.md },
-  
   triageCard: { backgroundColor: "#F0FDF4", borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.xl, borderWidth: 1, borderColor: "#BBF7D0" },
   triageHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   triageTitle: { fontSize: 18, fontWeight: "700", color: "#166534" },
   triageUrgency: { fontSize: 15, fontWeight: "600", color: "#15803D", marginBottom: 4 },
-  triageNote: { fontSize: 14, color: "#166534", marginBottom: spacing.md },
-  disclaimerBadge: { backgroundColor: "#DCFCE7", paddingVertical: 4, paddingHorizontal: 8, borderRadius: radius.sm, alignSelf: "flex-start" },
-  disclaimerText: { fontSize: 11, color: "#166534", fontWeight: "600" },
-
+  triageNote: { fontSize: 14, color: "#166534" },
   sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.md },
   stepsList: { gap: spacing.sm, marginBottom: spacing.xl },
-  
   stepCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
   activeCard: { borderColor: colors.accent, shadowColor: colors.accent, shadowOpacity: 0.1, elevation: 3 },
-  stepHeader: { flexDirection: "row", alignItems: "center" },
+  stepHeader: { flexDirection: "row", alignItems: "flex-start" },
   iconBox: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
   stepTextContainer: { flex: 1 },
   stepDescription: { fontSize: 15, fontWeight: "500", color: colors.text, marginBottom: 4 },
-  stepMeta: { fontSize: 12, fontWeight: "600", textTransform: "uppercase" },
-
-  checklistContainer: { marginTop: spacing.md },
-  checklistCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.md },
-  checkItem: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  checkText: { fontSize: 15, color: colors.text, fontWeight: "500" },
-  checkTextDone: { textDecorationLine: "line-through", color: colors.textMuted },
-
+  stepMeta: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", marginBottom: 6 },
+  stepImpact: { fontSize: 13, color: colors.textMuted, fontStyle: "italic", lineHeight: 18 },
+  deleteBtn: { padding: spacing.xs, marginLeft: spacing.sm },
   footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.md, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
   row: { flexDirection: "row", gap: spacing.md },
   flexButton: { flex: 1 },
+  errorFooter: { gap: spacing.sm }
 });
