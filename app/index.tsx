@@ -1,46 +1,58 @@
 // app/index.tsx
-import { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Pressable,
-} from "react-native";
+import { useState, useEffect } from "react";
+import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
+import { TriageWidget } from "../components/TriageWidget";
 import { colors, radius, spacing } from "../constants/theme";
-
-const PRESET_CHIPS = [
-  { label: "Dentist", text: "find me a dentist open Saturday under $100" },
-  { label: "Tooth pain", text: "my tooth hurts when I drink cold water" },
-  { label: "Cleaning", text: "book a routine dental cleaning" },
-];
+import { useAuth, supabase } from "../contexts/AuthContext";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const [input, setInput] = useState("");
+  const [recentVisits, setRecentVisits] = useState<any[]>([]);
   const router = useRouter();
+  const { user } = useAuth();
 
-  const handlePlan = () => {
-    if (!input.trim()) return;
-    router.push({ pathname: "/plan", params: { request: input.trim() } });
+  useEffect(() => {
+    async function fetchHistory() {
+      if (!user) return;
+      const { data } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(2);
+      if (data) setRecentVisits(data);
+    }
+    fetchHistory();
+  }, [user]);
+
+  const handlePlan = (customPrompt?: string) => {
+    const textToSubmit = customPrompt || input;
+    if (!textToSubmit.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push({ pathname: "/plan", params: { request: textToSubmit.trim() } });
   };
+
+  const greetingName = user?.email?.split("@")[0] || "there";
 
   return (
     <Screen>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView contentContainerStyle={styles.scroll}>
+          
           <View style={styles.header}>
-            <Text style={styles.title}>Cleared</Text>
-            <Text style={styles.subtitle}>Approve the plan before the AI acts.</Text>
+            <Text style={styles.greeting}>Hello, {greetingName} 👋</Text>
+            <Text style={styles.title}>What do you need today?</Text>
           </View>
+
+          {/* NEW FEATURE: VISUAL TRIAGE WIDGET */}
+          <TriageWidget onComplete={(prompt) => handlePlan(prompt)} />
+
+          <Text style={styles.orDivider}>OR DESCRIBE IT YOURSELF</Text>
 
           <View style={styles.inputContainer}>
             <TextInput
@@ -54,25 +66,34 @@ export default function HomeScreen() {
             />
           </View>
 
-          <View style={styles.chipsContainer}>
-            {PRESET_CHIPS.map((chip) => (
-              <Pressable
-                key={chip.label}
-                style={styles.chip}
-                onPress={() => setInput(chip.text)}
-              >
-                <Text style={styles.chipText}>{chip.label}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <Button title="Generate Custom Plan" onPress={() => handlePlan()} disabled={!input.trim()} />
 
-          <View style={styles.spacer} />
-
-          <Button
-            title="Plan it"
-            onPress={handlePlan}
-            disabled={!input.trim()}
-          />
+          {recentVisits.length > 0 && (
+            <View style={{ marginTop: spacing.xl }}>
+              <Text style={styles.sectionTitle}>Recent Visits</Text>
+              <View style={styles.historyContainer}>
+                {recentVisits.map((visit, index) => {
+                  const dateStr = new Date(visit.appointment_time).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <Pressable 
+                      key={index} 
+                      style={({ pressed }) => [styles.historyCard, pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }]} 
+                      onPress={() => setInput(`book another appointment at ${visit.clinic_name}`)}
+                    >
+                      <View style={styles.historyIcon}>
+                        <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+                      </View>
+                      <View style={styles.historyTextContainer}>
+                        <Text style={styles.historyClinic}>{visit.clinic_name}</Text>
+                        <Text style={styles.historyDate}>{dateStr}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={colors.border} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -80,60 +101,22 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  scroll: {
-    flexGrow: 1,
-    paddingBottom: spacing.xl,
-  },
-  header: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textMuted,
-  },
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1, paddingBottom: spacing.xl },
+  header: { marginTop: spacing.lg, marginBottom: spacing.lg },
+  greeting: { fontSize: 16, color: colors.textMuted, marginBottom: spacing.xs },
+  title: { fontSize: 28, fontWeight: "700", color: colors.text, letterSpacing: -0.5 },
+  orDivider: { fontSize: 12, fontWeight: "700", color: colors.textMuted, textAlign: "center", marginVertical: spacing.lg, letterSpacing: 1 },
   inputContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    minHeight: 120,
-    marginBottom: spacing.md,
+    backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
+    padding: spacing.md, minHeight: 100, marginBottom: spacing.md,
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-  },
-  chipsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  chip: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
-  },
-  chipText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  spacer: {
-    flex: 1,
-  },
+  input: { flex: 1, fontSize: 16, color: colors.text, lineHeight: 24 },
+  sectionTitle: { fontSize: 16, fontWeight: "600", color: colors.text, marginBottom: spacing.sm },
+  historyContainer: { gap: spacing.sm },
+  historyCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  historyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
+  historyTextContainer: { flex: 1 },
+  historyClinic: { fontSize: 15, fontWeight: "600", color: colors.text },
+  historyDate: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
 });

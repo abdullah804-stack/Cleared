@@ -287,7 +287,7 @@ export function useAgent(opts: UseAgentOptions) {
     audit("tool.started", `Starting ${step.tool}`, { stepId: step.id });
     const start = Date.now();
 
-    const result = await executeTool(step.tool as ToolName, step.args);
+    const result = await executeTool(step.tool as ToolName, step.args, opts.userId);
     const durationMs = Date.now() - start;
 
     if (result.ok) {
