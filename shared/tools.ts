@@ -60,7 +60,12 @@ export async function executeTool(
 
     case "book_appointment": {
       await delay(1000);
-      if (args.slot_id === "slot-2") {
+      // Force failure if the AI passes a placeholder (for demo error recovery)
+      if (
+        args.slot_id === "slot-2" || 
+        args.slot_id === "FIRST_AVAILABLE" || 
+        args.slot_id === "FROM_STEP_3"
+      ) {
         return { ok: false, error: "Slot no longer available" };
       }
       return {
