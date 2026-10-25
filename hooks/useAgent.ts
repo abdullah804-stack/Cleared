@@ -145,13 +145,9 @@ function reducer(state: AgentState, action: AgentAction): AgentState {
 }
 
 export interface UseAgentOptions {
-  /** Supabase Edge Function URL, e.g. https://<ref>.supabase.co/functions/v1/plan */
   planEndpoint: string;
-  /** Anon key for Authorization header */
   anonKey: string;
-  /** Called for every audit-worthy transition */
   onAudit?: (entry: Omit<AuditEntry, "id" | "timestamp" | "userId">) => void;
-  /** Current user id, used to stamp audit entries */
   userId?: string;
 }
 
@@ -166,14 +162,14 @@ export function useAgent(opts: UseAgentOptions) {
     [opts],
   );
 
-  /** Call /plan Edge Function and transition to AWAITING_APPROVAL or FAILED_PLANNING */
   const plan = useCallback(
     async (input: string) => {
       startedAtRef.current = Date.now();
       dispatch({ type: "PLAN_START", input });
       audit("request.received", `User submitted: "${input.slice(0, 60)}..."`);
 
-      try {
+      // Helper function for the network call so we can retry
+      const fetchPlan = async () => {
         const res = await fetch(opts.planEndpoint, {
           method: "POST",
           headers: {
@@ -182,28 +178,30 @@ export function useAgent(opts: UseAgentOptions) {
           },
           body: JSON.stringify({ input }),
         });
+        if (!res.ok) throw new Error(`Plan request failed (${res.status})`);
+        return await res.json();
+      };
 
-        const body = await res.json();
-
-        if (!res.ok) {
-          const reason =
-            typeof body?.error === "string" ? body.error : `Plan request failed (${res.status})`;
-          dispatch({ type: "PLAN_FAILED", reason });
-          audit("plan.failed", reason, { status: res.status });
-          return;
+      try {
+        let body: any;
+        try {
+          body = await fetchPlan();
+          // If the model returns an empty content string, throw to trigger a retry
+          if (!body?.choices?.[0]?.message?.content) {
+            throw new Error("Model returned empty response");
+          }
+        } catch (err) {
+          // RETRY ONCE silently
+          audit("plan.failed", "First attempt failed, retrying...", { error: String(err) });
+          body = await fetchPlan();
+          if (!body?.choices?.[0]?.message?.content) {
+            throw new Error("Model returned empty response again after retry");
+          }
         }
 
-                // Extract content from OpenRouter response
-        const content: string | undefined = body?.choices?.[0]?.message?.content;
-        if (!content) {
-          const rawError = JSON.stringify(body).slice(0, 150); // Show first 150 chars of error
-          dispatch({ type: "PLAN_FAILED", reason: `Planner empty: ${rawError}` });
-          audit("plan.failed", `Empty response. Raw: ${rawError}`);
-          return;
-        }
+        const content: string = body.choices[0].message.content;
 
-                // Aggressive extraction: Find the first '{' and the last '}' 
-        // This strips out any "Here is your plan:" text or markdown fences.
+        // Aggressive extraction to find the JSON object
         const firstBrace = content.indexOf("{");
         const lastBrace = content.lastIndexOf("}");
         
@@ -224,31 +222,26 @@ export function useAgent(opts: UseAgentOptions) {
           return;
         }
 
-        if (
-          typeof parsed !== "object" ||
-          parsed === null ||
-          "error" in parsed ||
-          !Array.isArray((parsed as { steps?: unknown }).steps)
-        ) {
-          const errMsg =
-            (parsed as { error?: string })?.error ?? "Planner returned an unexpected shape";
-          dispatch({ type: "PLAN_FAILED", reason: errMsg });
-          audit("plan.failed", errMsg);
+        if ("error" in parsed) {
+          dispatch({ type: "PLAN_FAILED", reason: parsed.error });
+          audit("plan.failed", parsed.error);
           return;
         }
 
-        const steps = (parsed as { steps: PlanStep[] }).steps;
-        if (steps.length < 1) {
-          dispatch({ type: "PLAN_FAILED", reason: "Plan has no steps" });
+        if (!Array.isArray(parsed.steps) || parsed.steps.length < 1) {
+          dispatch({ type: "PLAN_FAILED", reason: "Plan has no valid steps" });
           audit("plan.failed", "Plan has no steps");
           return;
         }
 
+        const steps = parsed.steps as PlanStep[];
         dispatch({ type: "PLAN_SUCCESS", plan: steps });
         audit("plan.created", `Plan with ${steps.length} steps`, {
           tools: steps.map((s) => s.tool),
         });
+
       } catch (err) {
+        // If it fails twice, catch it here and show a clean message
         const reason = err instanceof Error ? err.message : "Network error";
         dispatch({ type: "PLAN_FAILED", reason });
         audit("plan.failed", reason);
@@ -281,11 +274,6 @@ export function useAgent(opts: UseAgentOptions) {
     dispatch({ type: "RESET" });
   }, []);
 
-  /**
-   * Executes the current step. Called by the screen after APPROVE and after each SKIP.
-   * The reducer advances currentIndex; the caller is responsible for re-invoking
-   * `executeCurrent` until the state becomes COMPLETED or STEP_FAILED.
-   */
   const executeCurrent = useCallback(async () => {
     if (state.status !== "EXECUTING") return;
 

@@ -40,7 +40,7 @@ export default function PlanScreen() {
   // 4. Handle navigation on completion
   useEffect(() => {
     if (state.status === "COMPLETED") {
-      router.replace("/audit");
+      router.replace("/appointment");
     }
   }, [state.status, router]);
 
