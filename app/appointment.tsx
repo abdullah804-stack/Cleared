@@ -1,10 +1,9 @@
 // app/appointment.tsx
 import { useState, useEffect, useRef } from "react";
 import { StyleSheet, Text, View, ScrollView, Pressable, Dimensions, Platform } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
-import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import ConfettiCannon from "react-native-confetti-cannon";
@@ -28,7 +27,6 @@ export default function AppointmentScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [timeLeft, setTimeLeft] = useState(appointmentTime.getTime() - Date.now());
   
-  // NEW: Care Plan Check-offs State
   const [carePlan, setCarePlan] = useState<string[]>([]);
   const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
 
@@ -36,21 +34,12 @@ export default function AppointmentScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     confettiRef.current?.start();
 
-    // Load Care Plan from AsyncStorage (simulating what the AI generated)
     const loadCarePlan = async () => {
       const savedPlan = await AsyncStorage.getItem("current_care_plan");
       const savedChecks = await AsyncStorage.getItem("care_plan_checks");
       
-      if (savedPlan) {
-        setCarePlan(JSON.parse(savedPlan));
-      } else {
-        // Fallback if no plan was saved by the agent
-        setCarePlan([
-          "Avoid very cold or hot foods until evaluated.",
-          "Use desensitizing toothpaste and avoid hard chewing.",
-          "Rinse gently with warm salt water twice a day."
-        ]);
-      }
+      if (savedPlan) setCarePlan(JSON.parse(savedPlan));
+      else setCarePlan(["Avoid very cold or hot foods until evaluated.", "Use desensitizing toothpaste and avoid hard chewing."]);
 
       if (savedChecks) setCheckedItems(JSON.parse(savedChecks));
     };
@@ -84,6 +73,9 @@ export default function AppointmentScreen() {
     setShowPicker(Platform.OS === 'ios'); 
     if (selectedDate) {
       setAppointmentTime(selectedDate);
+      // Dynamic import prevents Expo Go crash
+      const Notifications = await import("expo-notifications");
+      
       const testTrigger = new Date(selectedDate);
       testTrigger.setMinutes(testTrigger.getMinutes() + 1);
       await Notifications.scheduleNotificationAsync({

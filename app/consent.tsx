@@ -1,8 +1,9 @@
 // app/consent.tsx
 import { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, Pressable } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { colors, radius, spacing } from "../constants/theme";
@@ -13,8 +14,13 @@ export default function ConsentScreen() {
   const [agreed, setAgreed] = useState(false);
 
   const handleAgree = async () => {
-    await SecureStore.setItemAsync("has_consented", "true");
-    router.replace("/");
+    try {
+      await SecureStore.setItemAsync("has_consented", "true");
+      await AsyncStorage.setItem("has_consented", "true");
+      router.replace("/");
+    } catch (error) {
+      Alert.alert("Error", "Could not save consent.");
+    }
   };
 
   return (
@@ -48,7 +54,13 @@ export default function ConsentScreen() {
         </Pressable>
 
         <View style={styles.spacer} />
-        <Button title="Agree & Continue" onPress={handleAgree} disabled={!agreed} />
+        
+        <Button 
+          title="Agree & Continue" 
+          onPress={handleAgree} 
+          disabled={!agreed} 
+          style={agreed ? styles.btnActive : styles.btnDisabled}
+        />
       </ScrollView>
     </Screen>
   );
@@ -66,6 +78,8 @@ const styles = StyleSheet.create({
   disclaimer: { backgroundColor: "#FEF2F2", padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.xl },
   disclaimerText: { fontSize: 13, color: "#991B1B", fontWeight: "500", lineHeight: 18 },
   checkRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xl },
-  checkText: { fontSize: 14, color: colors.text, fontWeight: "500" },
+  checkText: { fontSize: 14, color: colors.text, fontWeight: "500", flex: 1 },
   spacer: { flex: 1 },
+  btnActive: { backgroundColor: colors.accent },
+  btnDisabled: { backgroundColor: "#93C5FD" }, // Light blue for disabled state
 });

@@ -4,6 +4,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { initAuditDb } from "../shared/audit";
 import { initJournalDb } from "../shared/journal";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
@@ -20,8 +21,12 @@ function RootLayoutNav() {
 
   useEffect(() => {
     async function check() {
-      const consent = await SecureStore.getItemAsync("has_consented");
-      setHasConsent(consent === "true");
+      // Check both SecureStore and AsyncStorage to be safe
+      const secureConsent = await SecureStore.getItemAsync("has_consented");
+      const asyncConsent = await AsyncStorage.getItem("has_consented");
+      
+      const consented = secureConsent === "true" || asyncConsent === "true";
+      setHasConsent(consented);
       setCheckingConsent(false);
     }
     check();

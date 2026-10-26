@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +25,17 @@ export default function LoginScreen() {
       router.replace("/");
     } catch (error: any) {
       Alert.alert("Authentication Failed", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      Alert.alert("Google Login Failed", error.message);
     } finally {
       setLoading(false);
     }
@@ -75,6 +86,18 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* GOOGLE SIGN IN */}
+        <View style={styles.dividerContainer}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.divider} />
+        </View>
+
+        <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleAuth} disabled={loading}>
+          <Ionicons name="logo-google" size={20} color="#EA4335" />
+          <Text style={styles.googleBtnText}>Continue with Google</Text>
+        </TouchableOpacity>
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -91,4 +114,11 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.md, marginBottom: spacing.md, fontSize: 16, color: colors.text },
   toggleContainer: { marginTop: spacing.lg, alignItems: "center" },
   toggleText: { color: colors.accent, fontSize: 14, fontWeight: "500" },
+  
+  dividerContainer: { flexDirection: "row", alignItems: "center", marginVertical: spacing.xl },
+  divider: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { marginHorizontal: spacing.md, color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+  
+  googleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#FFF", borderWidth: 1, borderColor: colors.border, padding: spacing.md, borderRadius: radius.sm, gap: spacing.sm },
+  googleBtnText: { fontSize: 16, fontWeight: "600", color: colors.text },
 });

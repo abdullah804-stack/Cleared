@@ -1,6 +1,5 @@
 // shared/tools.ts
 import { supabase } from "../contexts/AuthContext";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import * as Location from "expo-location";
 
@@ -13,6 +12,10 @@ const SLOTS = [
 
 async function scheduleLocalAlerts(appointmentTime: Date) {
   if (Platform.OS === "web") return;
+  
+  // Dynamic import prevents Expo Go from crashing on boot
+  const Notifications = await import("expo-notifications");
+
   await Notifications.setNotificationHandler({
     handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }),
   });
@@ -90,7 +93,6 @@ export async function executeTool(
 
       case "generate_care_plan":
         await delay(600);
-        // AI-generated checklist based on the treatment
         return { 
           ok: true, 
           output: JSON.stringify([

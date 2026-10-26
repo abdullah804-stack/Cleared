@@ -1,6 +1,6 @@
 // app/index.tsx
 import { useState, useEffect, useMemo } from "react";
-import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
+import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
@@ -10,7 +10,18 @@ import { useThemeColors, radius, spacing } from "../constants/theme";
 import { useAuth, supabase } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
+
+// SAFE IMPORT: Prevent Expo Go from crashing if the native module is missing
+let ExpoSpeechRecognitionModule: any = null;
+let useSpeechRecognitionEvent: any = () => {};
+
+try {
+  const SpeechRecognition = require("expo-speech-recognition");
+  ExpoSpeechRecognitionModule = SpeechRecognition.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEvent = SpeechRecognition.useSpeechRecognitionEvent;
+} catch (e) {
+  // Module not available in Expo Go, voice button will gracefully fail
+}
 
 export default function HomeScreen() {
   const colors = useThemeColors();
@@ -32,15 +43,23 @@ export default function HomeScreen() {
     fetchHistory();
   }, [user]);
 
-  useSpeechRecognitionEvent("start", () => setIsListening(true));
-  useSpeechRecognitionEvent("end", () => setIsListening(false));
-  useSpeechRecognitionEvent("result", (event) => setInput(event.results[0]?.transcript || ""));
-  useSpeechRecognitionEvent("error", () => setIsListening(false));
+  if (useSpeechRecognitionEvent) {
+    useSpeechRecognitionEvent("start", () => setIsListening(true));
+    useSpeechRecognitionEvent("end", () => setIsListening(false));
+    useSpeechRecognitionEvent("result", (event: any) => setInput(event.results[0]?.transcript || ""));
+    useSpeechRecognitionEvent("error", () => setIsListening(false));
+  }
 
   const toggleListening = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (isListening) ExpoSpeechRecognitionModule.stop();
-    else {
+    if (!ExpoSpeechRecognitionModule) {
+      Alert.alert("Not Available", "Voice input requires the full APK build. It does not work in Expo Go.");
+      return;
+    }
+    
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+    } else {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!result.granted) return;
       ExpoSpeechRecognitionModule.start({ lang: lang === "ur" ? "ur-PK" : "en-US", interimResults: true });

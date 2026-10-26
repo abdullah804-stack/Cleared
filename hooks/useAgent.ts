@@ -2,7 +2,6 @@
 import { useReducer, useCallback, useRef } from "react";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import type { PlanStep, StepResult, AuditEntry, AuditEventType, ToolName } from "../shared/types";
 import { executeTool } from "../shared/tools";
 import { PlanSchema } from "../shared/schema";
@@ -174,9 +173,9 @@ export function useAgent(opts: any) {
       return;
     }
 
-const result = await executeTool(step.tool as ToolName, step.args, opts.userId, opts.userEmail);
+    const result = await executeTool(step.tool as ToolName, step.args, opts.userId, opts.userEmail);
+    
     if (result.ok) {
-      // NEW: If the AI generated a care plan, save it to local storage so the Appointment screen can read it!
       if (step.tool === "generate_care_plan") {
         await AsyncStorage.setItem("current_care_plan", result.output);
       }
@@ -184,3 +183,7 @@ const result = await executeTool(step.tool as ToolName, step.args, opts.userId, 
     } else {
       dispatch({ type: "STEP_FAILURE", result: { stepId: step.id, status: "failure", error: result.error, durationMs: 1000 }, reason: result.error });
     }
+  }, [state, opts.userId, opts.userEmail]);
+
+  return { state, plan, approve, reject, skip, retry, resume, abort, executeCurrent, removeStep, editStep };
+}
