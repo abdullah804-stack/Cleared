@@ -1,8 +1,8 @@
 // app/appointment.tsx
 import { useState, useEffect, useRef } from "react";
-import { StyleSheet, Text, View, ScrollView, Alert, Dimensions } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Dimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as Calendar from "expo-calendar";
+import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import { Screen } from "../components/Screen";
@@ -17,6 +17,7 @@ export default function AppointmentScreen() {
   const { request } = useLocalSearchParams<{ request: string }>();
   const { user } = useAuth();
   const confettiRef = useRef<any>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const [appointmentTime] = useState(() => {
     const d = new Date();
@@ -27,7 +28,6 @@ export default function AppointmentScreen() {
   const [timeLeft, setTimeLeft] = useState(appointmentTime.getTime() - Date.now());
 
   useEffect(() => {
-    // Trigger Confetti and Haptics on mount
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     confettiRef.current?.start();
 
@@ -46,49 +46,27 @@ export default function AppointmentScreen() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleAddToCalendar = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status === "granted") {
-      const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-      const defaultCalendar = calendars.find(c => c.isPrimary) || calendars[0];
-      
-      await Calendar.createEventAsync(defaultCalendar.id, {
-        title: "Dental Appointment - Bright Smile",
-        startDate: appointmentTime,
-        endDate: new Date(appointmentTime.getTime() + 60 * 60 * 1000),
-        location: "123 Dental Ave, City",
-        notes: "Booked via Cleared App",
-        alarms: [{ relativeOffset: -60 }],
-      });
-      Alert.alert("Success", "Added to your calendar!");
-    } else {
-      Alert.alert("Permission Denied", "Calendar access is required.");
-    }
-  };
+  const carePlan = [
+    { title: "Dietary Restrictions", desc: "Avoid very cold or hot foods until evaluated." },
+    { title: "Pain Management", desc: "Use desensitizing toothpaste and avoid hard chewing." },
+    { title: "Oral Hygiene", desc: "Rinse gently with warm salt water twice a day." },
+  ];
 
-  const handleExportPDF = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const fakeTrace = [
-      "Analyzed symptoms: Patient reported tooth pain with cold water.",
-      "Searched for dentists under $100.",
-      "Checked availability for Saturday.",
-      "Booked earliest available slot."
-    ];
-    generateClinicalPDF(user?.email || "demo@cleared.app", request || "Tooth pain", fakeTrace);
+  const handleReadAloud = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+    } else {
+      const text = carePlan.map(c => `${c.title}: ${c.desc}`).join(". ");
+      Speech.speak(text, { onDone: () => setIsSpeaking(false) });
+      setIsSpeaking(true);
+    }
   };
 
   return (
     <Screen>
-      {/* CONFETTI EFFECT */}
-      <ConfettiCannon 
-        ref={confettiRef} 
-        count={100} 
-        origin={{x: Dimensions.get('window').width / 2, y: -20}} 
-        autoStart={false} 
-        fadeOut={true}
-      />
-
+      <ConfettiCannon ref={confettiRef} count={100} origin={{x: Dimensions.get('window').width / 2, y: -20}} autoStart={false} fadeOut={true} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.successHeader}>
           <View style={styles.checkCircle}>
@@ -102,27 +80,26 @@ export default function AppointmentScreen() {
           <View style={styles.ticketTop}>
             <Text style={styles.timerLabel}>TIME UNTIL APPOINTMENT</Text>
             <Text style={styles.timerValue}>{formatTime(timeLeft)}</Text>
-            <View style={styles.reminderBadge}>
-              <Ionicons name="notifications" size={14} color="#166534" />
-              <Text style={styles.reminderText}>Reminder scheduled</Text>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.ticketBottom}>
-            <View style={styles.detailRow}>
-              <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
-              <Text style={styles.detailText}>Tomorrow, 10:00 AM</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Ionicons name="location-outline" size={18} color={colors.textMuted} />
-              <Text style={styles.detailText}>123 Dental Ave, City</Text>
-            </View>
           </View>
         </View>
 
-        <View style={styles.actionRow}>
-          <Button title="Add to Calendar" onPress={handleAddToCalendar} variant="ghost" style={styles.flexBtn} />
-          <Button title="Export PDF Summary" onPress={handleExportPDF} variant="ghost" style={styles.flexBtn} />
+        {/* AI CARE PLAN WITH SPEECH */}
+        <View style={styles.carePlanCard}>
+          <View style={styles.carePlanHeader}>
+            <Text style={styles.sectionTitle}>Your Pre-Visit Care Plan</Text>
+            <Pressable onPress={handleReadAloud} style={styles.speakerBtn}>
+              <Ionicons name={isSpeaking ? "stop-circle" : "volume-high"} size={24} color={colors.accent} />
+            </Pressable>
+          </View>
+          {carePlan.map((item, index) => (
+            <View key={index} style={styles.careItem}>
+              <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
+              <View style={styles.careTextContainer}>
+                <Text style={styles.careItemTitle}>{item.title}</Text>
+                <Text style={styles.careItemDesc}>{item.desc}</Text>
+              </View>
+            </View>
+          ))}
         </View>
 
       </ScrollView>
@@ -144,14 +121,16 @@ const styles = StyleSheet.create({
   ticket: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xl, overflow: "hidden" },
   ticketTop: { padding: spacing.xl, alignItems: "center" },
   timerLabel: { fontSize: 12, fontWeight: "700", color: colors.textMuted, letterSpacing: 1, marginBottom: spacing.sm },
-  timerValue: { fontSize: 48, fontWeight: "800", color: colors.text, fontVariant: ["tabular-nums"], letterSpacing: 2, marginBottom: spacing.md },
-  reminderBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F0FDF4", paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.full },
-  reminderText: { fontSize: 13, color: "#166534", fontWeight: "600" },
-  divider: { height: 1, backgroundColor: colors.border, borderStyle: "dashed", marginHorizontal: spacing.lg },
-  ticketBottom: { padding: spacing.lg, gap: spacing.md, backgroundColor: "#FAFAFA" },
-  detailRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  detailText: { fontSize: 15, color: colors.text, fontWeight: "500" },
-  actionRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.xl },
-  flexBtn: { flex: 1 },
+  timerValue: { fontSize: 48, fontWeight: "800", color: colors.text, fontVariant: ["tabular-nums"], letterSpacing: 2 },
+  
+  carePlanCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.xl },
+  carePlanHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  speakerBtn: { padding: spacing.xs, backgroundColor: "#E0E7FF", borderRadius: radius.full },
+  careItem: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+  careTextContainer: { flex: 1 },
+  careItemTitle: { fontSize: 15, fontWeight: "600", color: colors.text, marginBottom: 2 },
+  careItemDesc: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+
   footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.md, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
 });

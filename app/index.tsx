@@ -1,6 +1,6 @@
 // app/index.tsx
 import { useState, useEffect } from "react";
-import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable, Alert } from "react-native";
+import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
@@ -32,14 +32,13 @@ export default function HomeScreen() {
     fetchHistory();
   }, [user]);
 
-  // VOICE RECOGNITION HOOKS
   useSpeechRecognitionEvent("start", () => setIsListening(true));
   useSpeechRecognitionEvent("end", () => setIsListening(false));
   useSpeechRecognitionEvent("result", (event) => {
     setInput(event.results[0]?.transcript || "");
   });
   useSpeechRecognitionEvent("error", (event) => {
-    Alert.alert("Voice Error", event.error);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     setIsListening(false);
   });
 
@@ -50,7 +49,6 @@ export default function HomeScreen() {
     } else {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!result.granted) {
-        Alert.alert("Permission Denied", "Microphone access is required for voice input.");
         return;
       }
       ExpoSpeechRecognitionModule.start({ lang: "en-US", interimResults: true });
@@ -72,8 +70,13 @@ export default function HomeScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           
           <View style={styles.header}>
-            <Text style={styles.greeting}>Hello, {greetingName} 👋</Text>
-            <Text style={styles.title}>What do you need today?</Text>
+            <View>
+              <Text style={styles.greeting}>Hello, {greetingName} 👋</Text>
+              <Text style={styles.title}>What do you need today?</Text>
+            </View>
+            <Pressable onPress={() => router.push("/settings")} style={styles.settingsBtn}>
+              <Ionicons name="settings-outline" size={24} color={colors.text} />
+            </Pressable>
           </View>
 
           <TriageWidget onComplete={(prompt) => handlePlan(prompt)} />
@@ -90,7 +93,6 @@ export default function HomeScreen() {
               onChangeText={setInput}
               textAlignVertical="top"
             />
-            {/* NEW MIC BUTTON */}
             <Pressable 
               style={[styles.micButton, isListening && styles.micButtonActive]} 
               onPress={toggleListening}
@@ -136,9 +138,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { flexGrow: 1, paddingBottom: spacing.xl },
-  header: { marginTop: spacing.lg, marginBottom: spacing.lg },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginTop: spacing.lg, marginBottom: spacing.lg },
   greeting: { fontSize: 16, color: colors.textMuted, marginBottom: spacing.xs },
   title: { fontSize: 28, fontWeight: "700", color: colors.text, letterSpacing: -0.5 },
+  settingsBtn: { padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
   orDivider: { fontSize: 12, fontWeight: "700", color: colors.textMuted, textAlign: "center", marginVertical: spacing.lg, letterSpacing: 1 },
   inputContainer: {
     backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
