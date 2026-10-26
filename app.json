@@ -4,7 +4,10 @@
     "slug": "Cleared",
     "scheme": "cleared",
     "version": "1.0.0",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -33,7 +36,8 @@
       "expo-secure-store",
       "expo-sharing",
       "@react-native-community/datetimepicker",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true,
