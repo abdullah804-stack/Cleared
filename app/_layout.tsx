@@ -5,7 +5,9 @@ import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { initAuditDb } from "../shared/audit";
+import { initJournalDb } from "../shared/journal";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import { LanguageProvider } from "../contexts/LanguageContext";
 import { BiometricGate } from "../components/BiometricGate";
 import { colors } from "../constants/theme";
 
@@ -53,11 +55,13 @@ function RootLayoutNav() {
       <Stack.Screen name="consent" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="plan" options={{ title: "Plan", headerBackTitle: "Back" }} />
+      <Stack.Screen name="plan" options={{ title: "Plan" }} />
       <Stack.Screen name="audit" options={{ title: "Audit Log" }} />
       <Stack.Screen name="appointment" options={{ title: "Appointment", headerBackVisible: false }} />
       <Stack.Screen name="emergency" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ title: "Settings" }} />
+      <Stack.Screen name="journal" options={{ title: "Pain Journal" }} />
+      <Stack.Screen name="estimator" options={{ title: "Cost Estimator" }} />
     </Stack>
   );
 }
@@ -65,14 +69,17 @@ function RootLayoutNav() {
 export default function RootLayout() {
   useEffect(() => {
     initAuditDb().catch(console.error);
+    initJournalDb().catch(console.error);
   }, []);
 
   return (
     <AuthProvider>
-      <BiometricGate>
-        <StatusBar style="auto" />
-        <RootLayoutNav />
-      </BiometricGate>
+      <LanguageProvider>
+        <BiometricGate>
+          <StatusBar style="auto" />
+          <RootLayoutNav />
+        </BiometricGate>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

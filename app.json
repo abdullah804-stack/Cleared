@@ -4,11 +4,12 @@
     "slug": "Cleared",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "cleared",
+    "icon": "./icon.png",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
+    "splash": {
+      "image": "./icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2563EB"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,7 +38,8 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-speech-recognition",
-      "expo-sharing"
+      "expo-sharing",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

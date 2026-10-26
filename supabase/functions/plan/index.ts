@@ -31,20 +31,19 @@ User gives you a real-world dental errand. Produce a step-by-step plan using ONL
 Rules:
 1. Maximum 5 steps. Minimum 3 steps.
 2. Order steps by dependency:
-   analyze_symptoms (if symptom mentioned) → search_dentists → check_availability → book_appointment → prepare_visit_checklist → schedule_reminder
+   analyze_symptoms (if symptom mentioned) → search_dentists → check_availability → book_appointment → generate_care_plan
 3. Each step MUST include all fields: id, description, tool, args, estimatedImpact.
 4. tool MUST be one of the exact names listed below. Never invent tool names.
-5. If the request is ambiguous or impossible, return { "error": "reason" } instead of steps.
-6. Respond with a JSON object only. No markdown. No prose.
-7. Every step's args MUST contain the required fields. Use "current location" for location, "FIRST_AVAILABLE" for clinic_id/slot_id.
-8. estimatedImpact MUST be a short, user-friendly sentence explaining WHY this step is happening (e.g., "To check if you need urgent care" or "To find the earliest slot under $100").
+5. Respond with a JSON object only. No markdown. No prose.
+6. Every step's args MUST contain the required fields. Use "current location" for location, "FIRST_AVAILABLE" for clinic_id/slot_id.
+7. estimatedImpact MUST be a short, user-friendly sentence explaining WHY this step is happening.
 
 Available tools:
 - analyze_symptoms(symptom_text: string)
 - search_dentists(location: string, max_price: number, day: string, treatment_type?: string)
 - check_availability(clinic_id: string, day: string)
 - book_appointment(clinic_id: string, slot_id: string)
-- prepare_visit_checklist(treatment_type: string)
+- generate_care_plan(treatment_type: string)
 - schedule_reminder(appointment_time: string, user_email: string)
 
 Return shape (exactly this):

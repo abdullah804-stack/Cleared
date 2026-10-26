@@ -1,0 +1,47 @@
+// constants/translations.ts
+export const translations = {
+  en: {
+    hello: "Hello",
+    whatDoYouNeed: "What do you need today?",
+    quickSymptomCheck: "Quick Symptom Check",
+    whereHurts: "Where does it hurt?",
+    front: "Front",
+    molar: "Molar",
+    gums: "Gums",
+    painLevel: "Pain Level",
+    findDentistNow: "Find Dentist Now",
+    orDescribe: "OR DESCRIBE IT YOURSELF",
+    inputPlaceholder: "e.g. my tooth hurts, find a dentist open Saturday under $100",
+    generatePlan: "Generate Custom Plan",
+    painJournal: "Pain Journal",
+    costEstimator: "Cost Estimator",
+    recentVisits: "Recent Visits",
+    settings: "Settings",
+    english: "English",
+    urdu: "Urdu",
+    language: "Language",
+  },
+  ur: {
+    hello: "خوش آمدید",
+    whatDoYouNeed: "آج آپ کو کیا ضرورت ہے؟",
+    quickSymptomCheck: "فوری علامات کی جانچ",
+    whereHurts: "درد کہاں ہو رہا ہے؟",
+    front: "سامنے",
+    molar: "داڑھ",
+    gums: "مسوڑھے",
+    painLevel: "درد کی سطح",
+    findDentistNow: "ڈینٹسٹ تلاش کریں",
+    orDescribe: "یا خود بیان کریں",
+    inputPlaceholder: "مثال کے طور پر: میرے دانت میں درد ہے، ہفتہ کو ڈینٹسٹ تلاش کریں",
+    generatePlan: "منصوبہ بنائیں",
+    painJournal: "درد کی ڈائری",
+    costEstimator: "لاگت کا تخمینہ",
+    recentVisits: "حالیہ دورے",
+    settings: "ترتیبات",
+    english: "انگریزی",
+    urdu: "اردو",
+    language: "زبان",
+  }
+};
+
+export type Language = "en" | "ur";

@@ -1,8 +1,8 @@
 // app/journal.tsx
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, ScrollView, Pressable } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
-import Svg, { Rect, Text as SvgText } from "react-native-svg";
+import Svg, { Rect, Text as SvgText, Line } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
@@ -13,10 +13,12 @@ import { Ionicons } from "@expo/vector-icons";
 export default function JournalScreen() {
   const router = useRouter();
   const [history, setHistory] = useState<{ date: string; pain_level: number }[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadHistory = async () => {
     const data = await getPainHistory();
     setHistory(data);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -29,10 +31,9 @@ export default function JournalScreen() {
     await loadHistory();
   };
 
-  // Chart dimensions
+  const screenWidth = Dimensions.get("window").width - spacing.md * 2 - spacing.lg * 2;
   const chartHeight = 150;
-  const barWidth = 30;
-  const chartWidth = Math.max(history.length * 50, 300);
+  const barWidth = history.length > 0 ? (screenWidth / history.length) - 10 : 30;
 
   return (
     <Screen>
@@ -42,37 +43,68 @@ export default function JournalScreen() {
           <Text style={styles.subtitle}>Track your symptoms between visits.</Text>
         </View>
 
-        {/* CHART */}
+        {/* CHART CONTAINER */}
         <View style={styles.chartCard}>
-          {history.length === 0 ? (
+          <Text style={styles.chartTitle}>Pain Trend (Last 7 Days)</Text>
+          {isLoading ? (
+            <Text style={styles.emptyText}>Loading...</Text>
+          ) : history.length === 0 ? (
             <Text style={styles.emptyText}>No logs yet. Add your first entry below.</Text>
           ) : (
-            <Svg width="100%" height={chartHeight + 30} viewBox={`0 0 ${chartWidth} ${chartHeight + 30}`}>
-              {history.slice().reverse().map((item, index) => {
-                const height = (item.pain_level / 10) * chartHeight;
-                return (
-                  <View key={index}>
-                    <Rect
-                      x={index * 50 + 10}
-                      y={chartHeight - height}
-                      width={barWidth}
-                      height={height}
-                      rx={6}
-                      fill={item.pain_level > 7 ? colors.danger : item.pain_level > 4 ? "#F59E0B" : colors.accent}
-                    />
-                    <SvgText
-                      x={index * 50 + 10 + barWidth / 2}
-                      y={chartHeight + 20}
-                      fontSize="10"
-                      fill={colors.textMuted}
-                      textAnchor="middle"
-                    >
-                      {item.date.substring(5)} 
-                    </SvgText>
-                  </View>
-                );
-              })}
-            </Svg>
+            <View style={{ alignItems: "center", marginTop: spacing.md }}>
+              <Svg width={screenWidth} height={chartHeight + 30}>
+                {/* Horizontal Grid Lines */}
+                {[0, 5, 10].map((val) => (
+                  <Line
+                    key={val}
+                    x1="0"
+                    y1={chartHeight - (val / 10) * chartHeight}
+                    x2={screenWidth}
+                    y2={chartHeight - (val / 10) * chartHeight}
+                    stroke={colors.border}
+                    strokeWidth="1"
+                    strokeDasharray="4 4"
+                  />
+                ))}
+                
+                {/* Bars */}
+                {history.slice().reverse().map((item, index) => {
+                  const height = (item.pain_level / 10) * chartHeight;
+                  const x = index * (screenWidth / history.length) + 10;
+                  const y = chartHeight - height;
+
+                  // Color code based on severity
+                  let barColor = colors.accent;
+                  if (item.pain_level >= 7) barColor = colors.danger;
+                  else if (item.pain_level >= 4) barColor = "#F59E0B";
+
+                  return (
+                    <React.Fragment key={index}>
+                      <Rect x={x} y={y} width={barWidth} height={height} rx={6} fill={barColor} />
+                      <SvgText
+                        x={x + barWidth / 2}
+                        y={chartHeight + 20}
+                        fontSize="10"
+                        fill={colors.textMuted}
+                        textAnchor="middle"
+                      >
+                        {item.date.substring(5)}
+                      </SvgText>
+                      <SvgText
+                        x={x + barWidth / 2}
+                        y={y - 5}
+                        fontSize="12"
+                        fontWeight="bold"
+                        fill={colors.text}
+                        textAnchor="middle"
+                      >
+                        {item.pain_level}
+                      </SvgText>
+                    </React.Fragment>
+                  );
+                })}
+              </Svg>
+            </View>
           )}
         </View>
 
@@ -93,13 +125,17 @@ export default function JournalScreen() {
   );
 }
 
+// Add React import for Fragment
+import React from "react";
+
 const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: 120 },
   header: { marginTop: spacing.md, marginBottom: spacing.xl },
   title: { fontSize: 28, fontWeight: "800", color: colors.text },
   subtitle: { fontSize: 15, color: colors.textMuted, marginTop: spacing.xs },
-  chartCard: { backgroundColor: colors.surface, padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xl, alignItems: "center", justifyContent: "center", minHeight: 200 },
-  emptyText: { color: colors.textMuted, fontStyle: "italic" },
+  chartCard: { backgroundColor: colors.surface, padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xl },
+  chartTitle: { fontSize: 16, fontWeight: "600", color: colors.text, marginBottom: spacing.md },
+  emptyText: { color: colors.textMuted, fontStyle: "italic", textAlign: "center", marginVertical: spacing.xl },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: spacing.md },
   buttonGrid: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
   painBtn: { flex: 1, aspectRatio: 1, backgroundColor: "#E0E7FF", borderRadius: radius.md, alignItems: "center", justifyContent: "center" },

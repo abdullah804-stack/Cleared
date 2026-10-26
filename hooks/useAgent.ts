@@ -1,6 +1,8 @@
 // hooks/useAgent.ts
 import { useReducer, useCallback, useRef } from "react";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import type { PlanStep, StepResult, AuditEntry, AuditEventType, ToolName } from "../shared/types";
 import { executeTool } from "../shared/tools";
 import { PlanSchema } from "../shared/schema";
@@ -21,6 +23,7 @@ export type AgentAction =
   | { type: "PLAN_SUCCESS"; plan: PlanStep[] }
   | { type: "PLAN_FAILED"; reason: string }
   | { type: "REMOVE_STEP"; stepId: string }
+  | { type: "EDIT_STEP"; stepId: string; newArgs: Record<string, any> }
   | { type: "APPROVE"; stepByStep: boolean }
   | { type: "REJECT" }
   | { type: "STEP_SUCCESS"; result: StepResult }
@@ -49,6 +52,13 @@ function reducer(state: AgentState, action: AgentAction): AgentState {
       if (state.status !== "AWAITING_APPROVAL") return state;
       return { ...state, plan: state.plan.filter((s) => s.id !== action.stepId) };
 
+    case "EDIT_STEP":
+      if (state.status !== "AWAITING_APPROVAL") return state;
+      return {
+        ...state,
+        plan: state.plan.map(s => s.id === action.stepId ? { ...s, args: { ...s.args, ...action.newArgs } } : s)
+      };
+
     case "APPROVE":
       if (state.status !== "AWAITING_APPROVAL") return state;
       return { status: "EXECUTING", input: state.input, plan: state.plan, currentIndex: 0, results: [], stepByStep: action.stepByStep };
@@ -62,7 +72,6 @@ function reducer(state: AgentState, action: AgentAction): AgentState {
       const nextIndex = state.currentIndex + 1;
       const newResults = [...state.results, action.result];
       
-      // If Step-by-Step is on, pause before the next step
       if (state.stepByStep && nextIndex < state.plan.length) {
         return { status: "PAUSED", input: state.input, plan: state.plan, currentIndex: nextIndex, results: newResults };
       }
@@ -115,8 +124,7 @@ export function useAgent(opts: any) {
   const plan = useCallback(async (input: string) => {
     startedAtRef.current = Date.now();
     dispatch({ type: "PLAN_START", input });
-    audit("request.received", `User submitted: "${input.slice(0, 60)}..."`);
-
+    
     const emergencyKeywords = ["swelling", "fever", "breathing", "swallow", "trauma", "accident", "blood"];
     if (emergencyKeywords.some(k => input.toLowerCase().includes(k))) {
       dispatch({ type: "PLAN_FAILED", reason: "Emergency detected." });
@@ -147,9 +155,10 @@ export function useAgent(opts: any) {
     } catch (err: any) {
       dispatch({ type: "PLAN_FAILED", reason: err.message || "Invalid JSON" });
     }
-  }, [opts.planEndpoint, opts.anonKey, audit, router]);
+  }, [opts.planEndpoint, opts.anonKey, router]);
 
   const removeStep = useCallback((stepId: string) => dispatch({ type: "REMOVE_STEP", stepId }), []);
+  const editStep = useCallback((stepId: string, newArgs: any) => dispatch({ type: "EDIT_STEP", stepId, newArgs }), []);
   const approve = useCallback((stepByStep: boolean) => dispatch({ type: "APPROVE", stepByStep }), []);
   const reject = useCallback(() => dispatch({ type: "REJECT" }), []);
   const skip = useCallback(() => dispatch({ type: "SKIP_STEP" }), []);
@@ -165,13 +174,13 @@ export function useAgent(opts: any) {
       return;
     }
 
-    const result = await executeTool(step.tool as ToolName, step.args, opts.userId, opts.userEmail);
+const result = await executeTool(step.tool as ToolName, step.args, opts.userId, opts.userEmail);
     if (result.ok) {
+      // NEW: If the AI generated a care plan, save it to local storage so the Appointment screen can read it!
+      if (step.tool === "generate_care_plan") {
+        await AsyncStorage.setItem("current_care_plan", result.output);
+      }
       dispatch({ type: "STEP_SUCCESS", result: { stepId: step.id, status: "success", output: result.output, durationMs: 1000 } });
     } else {
       dispatch({ type: "STEP_FAILURE", result: { stepId: step.id, status: "failure", error: result.error, durationMs: 1000 }, reason: result.error });
     }
-  }, [state, opts.userId, opts.userEmail]);
-
-  return { state, plan, approve, reject, skip, retry, resume, abort, executeCurrent, removeStep };
-}

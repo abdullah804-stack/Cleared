@@ -32,7 +32,9 @@ export async function logPain(level: number) {
 
 export async function getPainHistory() {
   const db = await getDb();
-  return await db.getAllAsync<{ date: string; pain_level: number }>(
-    `SELECT date, AVG(pain_level) as pain_level FROM pain_journal GROUP BY date ORDER BY date DESC LIMIT 7`
+  // Get the latest 7 days of logs
+  const rows = await db.getAllAsync<{ date: string; pain_level: number }>(
+    `SELECT date, MAX(pain_level) as pain_level FROM pain_journal GROUP BY date ORDER BY date DESC LIMIT 7`
   );
+  return rows;
 }

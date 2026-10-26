@@ -1,7 +1,7 @@
 // app/plan.tsx
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { StyleSheet, Text, View, ScrollView, Pressable, Switch, Linking } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Switch, Linking, Alert, Platform } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
@@ -26,7 +26,7 @@ export default function PlanScreen() {
   
   const [stepByStep, setStepByStep] = useState(false);
 
-  const { state, plan, approve, reject, skip, retry, resume, executeCurrent, removeStep } = useAgent({
+  const { state, plan, approve, reject, skip, retry, resume, executeCurrent, removeStep, editStep } = useAgent({
     planEndpoint: "https://gevnakyvjxvnzasruzwh.supabase.co/functions/v1/plan",
     anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU",
     userId, userEmail: user?.email,
@@ -44,6 +44,28 @@ export default function PlanScreen() {
   useEffect(() => {
     if (state.status === "COMPLETED") router.replace("/appointment");
   }, [state.status, router]);
+
+  const handleEditBudget = (stepId: string, currentBudget: number) => {
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        "Edit Budget",
+        "Enter new max price ($)",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Save", onPress: (val) => { if (val) editStep(stepId, { max_price: Number(val) }); } }
+        ],
+        "plain-text",
+        String(currentBudget)
+      );
+    } else {
+      // Android fallback (Alert.prompt is iOS only)
+      Alert.alert(
+        "Edit Budget",
+        `Current budget is $${currentBudget}. To change it, please type the new amount in the home screen.`,
+        [{ text: "OK" }]
+      );
+    }
+  };
 
   const renderStep = (step: any, index: number) => {
     let statusColor = colors.border; let statusText = "Pending"; let iconColor = colors.textMuted;
@@ -74,6 +96,13 @@ export default function PlanScreen() {
             <Text style={[styles.stepMeta, { color: iconColor }]}>{statusText}</Text>
             <Text style={styles.stepImpact}>Why: {step.estimatedImpact}</Text>
             
+            {/* DISPLAY BUDGET IF IT'S A SEARCH STEP */}
+            {isClinic && step.args.max_price && (
+              <View style={styles.budgetBadge}>
+                <Text style={styles.budgetText}>Budget: ${step.args.max_price}</Text>
+              </View>
+            )}
+
             {isClinic && state.status === "COMPLETED" && (
               <View style={styles.clinicActions}>
                 <Pressable style={styles.clinicBtn} onPress={() => Linking.openURL(`tel:555-123-4567`)}>
@@ -87,10 +116,18 @@ export default function PlanScreen() {
               </View>
             )}
           </View>
+          
           {isEditing && (
-            <Pressable onPress={() => removeStep(step.id)} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
-            </Pressable>
+            <View style={styles.editActions}>
+              {isClinic && (
+                <Pressable onPress={() => handleEditBudget(step.id, step.args.max_price || 100)} style={styles.actionBtn}>
+                  <Ionicons name="pencil" size={18} color={colors.accent} />
+                </Pressable>
+              )}
+              <Pressable onPress={() => removeStep(step.id)} style={styles.actionBtn}>
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              </Pressable>
+            </View>
           )}
         </View>
       </Animated.View>
@@ -177,8 +214,13 @@ const styles = StyleSheet.create({
   stepDescription: { fontSize: 15, fontWeight: "500", color: colors.text, marginBottom: 4 },
   stepMeta: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", marginBottom: 6 },
   stepImpact: { fontSize: 13, color: colors.textMuted, fontStyle: "italic", lineHeight: 18, marginBottom: spacing.sm },
-  deleteBtn: { padding: spacing.xs, marginLeft: spacing.sm },
   
+  budgetBadge: { backgroundColor: "#F0FDF4", alignSelf: "flex-start", paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, marginBottom: spacing.sm },
+  budgetText: { fontSize: 13, fontWeight: "700", color: "#166534" },
+  
+  editActions: { flexDirection: "row", gap: spacing.sm, marginLeft: spacing.sm },
+  actionBtn: { padding: spacing.xs, backgroundColor: "#F3F4F6", borderRadius: radius.full },
+
   clinicActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
   clinicBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#E0E7FF", paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.full },
   clinicBtnText: { fontSize: 12, fontWeight: "600", color: colors.accent },
