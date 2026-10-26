@@ -1,12 +1,12 @@
 // app/appointment.tsx
 import { useState, useEffect, useRef } from "react";
-import { StyleSheet, Text, View, ScrollView, Pressable, Dimensions, Platform } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Platform } from "react-native";
 import { useRouter } from "expo-router";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming } from "react-native-reanimated";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import ConfettiCannon from "react-native-confetti-cannon";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { colors, radius, spacing } from "../constants/theme";
@@ -14,8 +14,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function AppointmentScreen() {
   const router = useRouter();
-  const confettiRef = useRef<any>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Animation values for the success checkmark
+  const scale = useSharedValue(0);
+  const animatedIconStyle = useAnimatedStyle(() => {
+    return { transform: [{ scale: scale.value }] };
+  });
 
   const [appointmentTime, setAppointmentTime] = useState(() => {
     const d = new Date();
@@ -31,8 +36,12 @@ export default function AppointmentScreen() {
   const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
+    // Trigger Success Haptics and Animation
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    confettiRef.current?.start();
+    scale.value = withSequence(
+      withSpring(1.2, { damping: 10, stiffness: 100 }),
+      withSpring(1, { damping: 10, stiffness: 100 })
+    );
 
     const loadCarePlan = async () => {
       const savedPlan = await AsyncStorage.getItem("current_care_plan");
@@ -73,7 +82,6 @@ export default function AppointmentScreen() {
     setShowPicker(Platform.OS === 'ios'); 
     if (selectedDate) {
       setAppointmentTime(selectedDate);
-      // Dynamic import prevents Expo Go crash
       const Notifications = await import("expo-notifications");
       
       const testTrigger = new Date(selectedDate);
@@ -100,12 +108,11 @@ export default function AppointmentScreen() {
 
   return (
     <Screen>
-      <ConfettiCannon ref={confettiRef} count={100} origin={{x: Dimensions.get('window').width / 2, y: -20}} autoStart={false} fadeOut={true} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.successHeader}>
-          <View style={styles.checkCircle}>
+          <Animated.View style={[styles.checkCircle, animatedIconStyle]}>
             <Ionicons name="checkmark" size={40} color="#FFF" />
-          </View>
+          </Animated.View>
           <Text style={styles.title}>Booked Successfully</Text>
           <Text style={styles.subtitle}>Bright Smile Dental</Text>
         </View>
