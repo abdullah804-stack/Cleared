@@ -22,7 +22,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.ai_abdullah2026.Cleared"
+"package": "com.ai_abdullah2026.cleared"
     },
     "plugins": [
       "expo-router",
