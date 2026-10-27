@@ -4,10 +4,7 @@
     "slug": "Cleared",
     "scheme": "cleared",
     "version": "1.0.0",
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "platforms": ["ios", "android"],
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -35,6 +32,7 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-sharing",
+      "expo-notifications",
       "@react-native-community/datetimepicker",
       "expo-web-browser",
       "expo-build-properties"
