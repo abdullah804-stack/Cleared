@@ -1,5 +1,5 @@
 // app/plan.tsx
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, Text, View, ScrollView, Pressable, Switch, Linking, Alert, Platform } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
@@ -14,8 +14,12 @@ import { useAuth } from "../contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
 const TOOL_ICONS: Record<string, any> = {
-  analyze_symptoms: "pulse", search_dentists: "search", check_availability: "calendar",
-  book_appointment: "checkmark-circle", prepare_visit_checklist: "list", schedule_reminder: "notifications",
+  analyze_symptoms: "pulse", 
+  search_dentists: "search", 
+  check_availability: "calendar",
+  book_appointment: "checkmark-circle", 
+  prepare_visit_checklist: "list", 
+  schedule_reminder: "notifications",
 };
 
 export default function PlanScreen() {
@@ -29,7 +33,8 @@ export default function PlanScreen() {
   const { state, plan, approve, reject, skip, retry, resume, executeCurrent, removeStep, editStep } = useAgent({
     planEndpoint: "https://gevnakyvjxvnzasruzwh.supabase.co/functions/v1/plan",
     anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU",
-    userId, userEmail: user?.email,
+    userId, 
+    userEmail: user?.email,
     onAudit: async (entry: any) => await writeAudit(userId, entry.type, entry.description, entry.detail),
   });
 
@@ -58,7 +63,6 @@ export default function PlanScreen() {
         String(currentBudget)
       );
     } else {
-      // Android fallback (Alert.prompt is iOS only)
       Alert.alert(
         "Edit Budget",
         `Current budget is $${currentBudget}. To change it, please type the new amount in the home screen.`,
@@ -68,7 +72,9 @@ export default function PlanScreen() {
   };
 
   const renderStep = (step: any, index: number) => {
-    let statusColor = colors.border; let statusText = "Pending"; let iconColor = colors.textMuted;
+    let statusColor = colors.border; 
+    let statusText = "Pending"; 
+    let iconColor = colors.textMuted;
 
     if (state.status === "EXECUTING" || state.status === "STEP_FAILED" || state.status === "COMPLETED" || state.status === "PAUSED") {
       const currentIdx = "currentIndex" in state ? state.currentIndex : state.plan.length;
@@ -96,7 +102,6 @@ export default function PlanScreen() {
             <Text style={[styles.stepMeta, { color: iconColor }]}>{statusText}</Text>
             <Text style={styles.stepImpact}>Why: {step.estimatedImpact}</Text>
             
-            {/* DISPLAY BUDGET IF IT'S A SEARCH STEP */}
             {isClinic && step.args.max_price && (
               <View style={styles.budgetBadge}>
                 <Text style={styles.budgetText}>Budget: ${step.args.max_price}</Text>
@@ -143,7 +148,9 @@ export default function PlanScreen() {
           <View style={styles.pausedContainer}>
             <Ionicons name="pause-circle" size={64} color={colors.accent} />
             <Text style={styles.pausedTitle}>Plan Paused</Text>
-            <Text style={styles.pausedText}>Step-by-step approval is on. The next step is: <Text style={{fontWeight: "bold"}}>{state.plan[state.currentIndex]?.description}</Text></Text>
+            <Text style={styles.pausedText}>
+              Step-by-step approval is on. The next step is: <Text style={{fontWeight: "bold"}}>{state.plan[state.currentIndex]?.description}</Text>
+            </Text>
             <Button title="Resume Next Step" onPress={resume} style={{ marginTop: spacing.lg, width: "100%" }} />
             <Button title="Abort Run" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.sm, width: "100%" }} />
           </View>

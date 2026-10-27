@@ -4,6 +4,7 @@ export type ToolName =
   | "search_dentists"
   | "check_availability"
   | "book_appointment"
+  | "generate_care_plan"
   | "prepare_visit_checklist"
   | "schedule_reminder";
 

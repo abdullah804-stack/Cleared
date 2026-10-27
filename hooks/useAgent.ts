@@ -2,7 +2,7 @@
 import { useReducer, useCallback, useRef } from "react";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { PlanStep, StepResult, AuditEntry, AuditEventType, ToolName } from "../shared/types";
+import type { PlanStep, StepResult, AuditEntry, AuditEventType } from "../shared/types";
 import { executeTool } from "../shared/tools";
 import { PlanSchema } from "../shared/schema";
 
@@ -97,7 +97,13 @@ function reducer(state: AgentState, action: AgentAction): AgentState {
       return { status: "EXECUTING", input: state.input, plan: state.plan, currentIndex: state.currentIndex, results: state.results, stepByStep: false };
 
     case "ABORT":
-      return { status: "ABORTED", input: state.input, plan: state.plan, results: state.results };
+      if (!("plan" in state)) return state;
+      return {
+        status: "ABORTED",
+        input: state.input,
+        plan: state.plan,
+        results: "results" in state ? state.results : [],
+      };
 
     case "COMPLETE":
       if (state.status !== "EXECUTING") return state;
@@ -173,7 +179,7 @@ export function useAgent(opts: any) {
       return;
     }
 
-    const result = await executeTool(step.tool as ToolName, step.args, opts.userId, opts.userEmail);
+    const result = await executeTool(step.tool, step.args, opts.userId, opts.userEmail);
     
     if (result.ok) {
       if (step.tool === "generate_care_plan") {

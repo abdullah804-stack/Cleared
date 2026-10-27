@@ -9,10 +9,11 @@ export const PlanStepSchema = z.object({
     "search_dentists",
     "check_availability",
     "book_appointment",
+    "generate_care_plan",
     "prepare_visit_checklist",
     "schedule_reminder",
   ]),
-  args: z.record(z.any()),
+  args: z.record(z.string(), z.unknown()),
   estimatedImpact: z.string(),
 });
 
