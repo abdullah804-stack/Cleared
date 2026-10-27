@@ -87,7 +87,6 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* GOOGLE SIGN IN */}
         <View style={styles.dividerContainer}>
           <View style={styles.divider} />
           <Text style={styles.dividerText}>OR</Text>

@@ -14,12 +14,18 @@ export default function ConsentScreen() {
   const [agreed, setAgreed] = useState(false);
 
   const handleAgree = async () => {
+    if (!agreed) return; // Safety check
+    
     try {
+      console.log("Consent button clicked, saving state...");
       await SecureStore.setItemAsync("has_consented", "true");
       await AsyncStorage.setItem("has_consented", "true");
+      console.log("State saved, navigating to home...");
       router.replace("/");
     } catch (error) {
-      Alert.alert("Error", "Could not save consent.");
+      console.error("Consent Error:", error);
+      // If save fails, we force navigate anyway so the user isn't stuck
+      router.replace("/");
     }
   };
 
@@ -59,7 +65,6 @@ export default function ConsentScreen() {
           title="Agree & Continue" 
           onPress={handleAgree} 
           disabled={!agreed} 
-          style={agreed ? styles.btnActive : styles.btnDisabled}
         />
       </ScrollView>
     </Screen>
@@ -80,6 +85,4 @@ const styles = StyleSheet.create({
   checkRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xl },
   checkText: { fontSize: 14, color: colors.text, fontWeight: "500", flex: 1 },
   spacer: { flex: 1 },
-  btnActive: { backgroundColor: colors.accent },
-  btnDisabled: { backgroundColor: "#93C5FD" }, // Light blue for disabled state
 });

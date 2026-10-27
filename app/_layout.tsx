@@ -19,30 +19,42 @@ function RootLayoutNav() {
   const [checkingConsent, setCheckingConsent] = useState(true);
   const [hasConsent, setHasConsent] = useState(false);
 
+  // 1. Check Consent
   useEffect(() => {
     async function check() {
-      // Check both SecureStore and AsyncStorage to be safe
-      const secureConsent = await SecureStore.getItemAsync("has_consented");
-      const asyncConsent = await AsyncStorage.getItem("has_consented");
-      
-      const consented = secureConsent === "true" || asyncConsent === "true";
-      setHasConsent(consented);
-      setCheckingConsent(false);
+      try {
+        const secureConsent = await SecureStore.getItemAsync("has_consented");
+        const asyncConsent = await AsyncStorage.getItem("has_consented");
+        
+        const consented = secureConsent === "true" || asyncConsent === "true";
+        setHasConsent(consented);
+      } catch (e) {
+        console.error("Consent read error", e);
+      } finally {
+        setCheckingConsent(false);
+      }
     }
     check();
   }, []);
 
+  // 2. Handle Navigation
   useEffect(() => {
     if (loading || checkingConsent) return;
     
+    // The segments array tells us exactly which screen we are on
     const inAuthGroup = segments[0] === "(auth)";
     const inConsent = segments[0] === "consent";
 
+    // If no consent and not on consent screen -> go to consent
     if (!hasConsent && !inConsent) {
       router.replace("/consent");
-    } else if (hasConsent && !user && !inAuthGroup) {
+    } 
+    // If consent is given but no user and not on auth screen -> go to login
+    else if (hasConsent && !user && !inAuthGroup) {
       router.replace("/(auth)/login");
-    } else if (hasConsent && user && (inAuthGroup || inConsent)) {
+    } 
+    // If user is logged in and consent is given, but we are still on auth/consent -> go to home
+    else if (hasConsent && user && (inAuthGroup || inConsent)) {
       router.replace("/");
     }
   }, [user, loading, hasConsent, checkingConsent, segments]);

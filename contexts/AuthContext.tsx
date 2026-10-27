@@ -62,8 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
-    // Get the correct deep link for Expo Go
-    const redirectUrl = Linking.createURL("/");
+    // FORCE the app to use the cleared:// deep link
+    const redirectUrl = "cleared://";
     
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -72,7 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) throw error;
 
-    // Open the browser and wait for the deep link callback
     const res = await WebBrowser.openAuthSessionAsync(data?.url ?? "", redirectUrl);
 
     if (res.type === "success") {
