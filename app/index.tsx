@@ -1,147 +1,114 @@
 // app/index.tsx
-import { useState, useEffect, useMemo } from "react";
-import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable, Alert } from "react-native";
+import { useState, useMemo } from "react";
+import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable, Image } from "react-native";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
-import { TriageWidget } from "../components/TriageWidget";
 import { useThemeColors, radius, spacing } from "../constants/theme";
-import { useAuth, supabase } from "../contexts/AuthContext";
-import { useLanguage } from "../contexts/LanguageContext";
+import { useAuth } from "../contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
-
-// SAFE IMPORT: Prevent Expo Go from crashing if the native module is missing
-let ExpoSpeechRecognitionModule: any = null;
-let useSpeechRecognitionEvent: any = () => {};
-
-try {
-  const SpeechRecognition = require("expo-speech-recognition");
-  ExpoSpeechRecognitionModule = SpeechRecognition.ExpoSpeechRecognitionModule;
-  useSpeechRecognitionEvent = SpeechRecognition.useSpeechRecognitionEvent;
-} catch (e) {
-  // Module not available in Expo Go, voice button will gracefully fail
-}
 
 export default function HomeScreen() {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   
   const [input, setInput] = useState("");
-  const [recentVisits, setRecentVisits] = useState<any[]>([]);
-  const [isListening, setIsListening] = useState(false);
   const router = useRouter();
-  const { user } = useAuth();
-  const { t, lang } = useLanguage();
+  const { user, profile } = useAuth();
 
-  useEffect(() => {
-    async function fetchHistory() {
-      if (!user) return;
-      const { data } = await supabase.from("appointments").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(2);
-      if (data) setRecentVisits(data);
-    }
-    fetchHistory();
-  }, [user]);
+  // Fallback to the first part of the email if no name is set
+  const displayName = profile?.full_name || user?.email?.split("@")[0] || "there";
+  const initial = displayName.charAt(0).toUpperCase();
 
-  if (useSpeechRecognitionEvent) {
-    useSpeechRecognitionEvent("start", () => setIsListening(true));
-    useSpeechRecognitionEvent("end", () => setIsListening(false));
-    useSpeechRecognitionEvent("result", (event: any) => setInput(event.results[0]?.transcript || ""));
-    useSpeechRecognitionEvent("error", () => setIsListening(false));
-  }
-
-  const toggleListening = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!ExpoSpeechRecognitionModule) {
-      Alert.alert("Not Available", "Voice input requires the full APK build. It does not work in Expo Go.");
-      return;
-    }
-    
-    if (isListening) {
-      ExpoSpeechRecognitionModule.stop();
-    } else {
-      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!result.granted) return;
-      ExpoSpeechRecognitionModule.start({ lang: lang === "ur" ? "ur-PK" : "en-US", interimResults: true });
-    }
+  const handlePlan = () => {
+    if (!input.trim()) return;
+    router.push({ pathname: "/plan", params: { request: input.trim() } });
   };
-
-  const handlePlan = (customPrompt?: string) => {
-    const textToSubmit = customPrompt || input;
-    if (!textToSubmit.trim()) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push({ pathname: "/plan", params: { request: textToSubmit.trim() } });
-  };
-
-  const greetingName = user?.email?.split("@")[0] || "there";
 
   return (
     <Screen>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView contentContainerStyle={styles.scroll}>
           
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>{t.hello}, {greetingName} 👋</Text>
-              <Text style={styles.title}>{t.whatDoYouNeed}</Text>
+          {/* Animated Header */}
+          <Animated.View entering={FadeInDown.duration(600).springify()} style={styles.header}>
+            <View style={styles.profileRow}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initial}</Text>
+              </View>
+              <View>
+                <Text style={styles.greeting}>Welcome back,</Text>
+                <Text style={styles.name}>{displayName}</Text>
+              </View>
             </View>
             <Pressable onPress={() => router.push("/settings")} style={styles.settingsBtn}>
-              <Ionicons name="settings-outline" size={24} color={colors.text} />
+              <Ionicons name="settings-outline" size={22} color={colors.text} />
             </Pressable>
-          </View>
+          </Animated.View>
 
-          <TriageWidget onComplete={(prompt) => handlePlan(prompt)} />
-
-          <Text style={styles.orDivider}>{t.orDescribe}</Text>
-
-          <View style={styles.inputContainer}>
+          {/* Animated Input Card with AI Assistant */}
+          <Animated.View entering={FadeInDown.delay(200).duration(600).springify()} style={styles.inputCard}>
+            <View style={styles.assistantHeader}>
+              <Image 
+                source={require("../assets/images/assistant.png")} 
+                style={styles.assistantAvatar} 
+                // Fallback if image isn't generated yet
+                defaultSource={require("../assets/images/icon.png")} 
+              />
+              <Text style={styles.inputLabel}>How can I help you today?</Text>
+            </View>
             <TextInput
               style={styles.input}
-              placeholder={t.inputPlaceholder}
+              placeholder="Describe your dental issue..."
               placeholderTextColor={colors.textMuted}
               multiline
               value={input}
               onChangeText={setInput}
               textAlignVertical="top"
             />
-            <Pressable style={[styles.micButton, isListening && styles.micButtonActive]} onPress={toggleListening}>
-              <Ionicons name={isListening ? "stop" : "mic"} size={22} color={isListening ? "#FFF" : colors.accent} />
-            </Pressable>
-          </View>
-
-          <Button title={t.generatePlan} onPress={() => handlePlan()} disabled={!input.trim()} />
-
-          <View style={styles.actionRow}>
-            <Pressable style={styles.actionBtn} onPress={() => router.push("/journal")}>
-              <Ionicons name="analytics" size={20} color={colors.accent} />
-              <Text style={styles.actionBtnText}>{t.painJournal}</Text>
-            </Pressable>
-            <Pressable style={styles.actionBtn} onPress={() => router.push("/estimator")}>
-              <Ionicons name="calculator" size={20} color={colors.accent} />
-              <Text style={styles.actionBtnText}>{t.costEstimator}</Text>
-            </Pressable>
-          </View>
-
-          {recentVisits.length > 0 && (
-            <View style={{ marginTop: spacing.md }}>
-              <Text style={styles.sectionTitle}>{t.recentVisits}</Text>
-              <View style={styles.historyContainer}>
-                {recentVisits.map((visit, index) => {
-                  const dateStr = new Date(visit.appointment_time).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                  return (
-                    <Pressable key={index} style={({ pressed }) => [styles.historyCard, pressed && { opacity: 0.7 }]} onPress={() => setInput(`book another appointment at ${visit.clinic_name}`)}>
-                      <View style={styles.historyIcon}><Ionicons name="time-outline" size={20} color={colors.textMuted} /></View>
-                      <View style={styles.historyTextContainer}>
-                        <Text style={styles.historyClinic}>{visit.clinic_name}</Text>
-                        <Text style={styles.historyDate}>{dateStr}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color={colors.border} />
-                    </Pressable>
-                  );
-                })}
-              </View>
+            <View style={styles.inputFooter}>
+              <Pressable style={styles.iconBtn}>
+                <Ionicons name="mic" size={20} color={colors.accent} />
+              </Pressable>
+              <Button title="Generate Plan" onPress={handlePlan} disabled={!input.trim()} style={{ flex: 1, marginLeft: spacing.sm, height: 44 }} />
             </View>
-          )}
+          </Animated.View>
+
+          {/* Animated Quick Triage */}
+          <Animated.View entering={FadeInUp.delay(300).duration(600).springify()}>
+            <Text style={styles.sectionTitle}>Quick Triage</Text>
+            <View style={styles.triageGrid}>
+              <Pressable style={styles.triageCard} onPress={() => setInput("My tooth hurts when I drink cold water")}>
+                <View style={[styles.triageIcon, { backgroundColor: "#FEE2E2" }]}>
+                  <Ionicons name="thermometer" size={24} color="#EF4444" />
+                </View>
+                <Text style={styles.triageTitle}>Tooth Pain</Text>
+              </Pressable>
+              <Pressable style={styles.triageCard} onPress={() => setInput("I need a routine dental cleaning")}>
+                <View style={[styles.triageIcon, { backgroundColor: "#E0F2FE" }]}>
+                  <Ionicons name="sparkles" size={24} color="#0EA5E9" />
+                </View>
+                <Text style={styles.triageTitle}>Cleaning</Text>
+              </Pressable>
+            </View>
+          </Animated.View>
+
+          {/* Animated Health Tools */}
+          <Animated.View entering={FadeInUp.delay(400).duration(600).springify()}>
+            <Text style={styles.sectionTitle}>Your Health</Text>
+            <View style={styles.actionRow}>
+              <Pressable style={styles.actionCard} onPress={() => router.push("/journal")}>
+                <Ionicons name="analytics" size={24} color={colors.accent} />
+                <Text style={styles.actionText}>Pain Journal</Text>
+              </Pressable>
+              <Pressable style={styles.actionCard} onPress={() => router.push("/estimator")}>
+                <Ionicons name="calculator" size={24} color={colors.accent} />
+                <Text style={styles.actionText}>Cost Estimator</Text>
+              </Pressable>
+            </View>
+          </Animated.View>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -150,23 +117,32 @@ export default function HomeScreen() {
 
 const createStyles = (colors: any) => StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: spacing.xl },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginTop: spacing.lg, marginBottom: spacing.lg },
-  greeting: { fontSize: 16, color: colors.textMuted, marginBottom: spacing.xs },
-  title: { fontSize: 28, fontWeight: "700", color: colors.text, letterSpacing: -0.5, flexShrink: 1 },
-  settingsBtn: { padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
-  orDivider: { fontSize: 12, fontWeight: "700", color: colors.textMuted, textAlign: "center", marginVertical: spacing.lg, letterSpacing: 1 },
-  inputContainer: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, minHeight: 100, marginBottom: spacing.md },
-  input: { flex: 1, fontSize: 16, color: colors.text, lineHeight: 24, paddingRight: 40 },
-  micButton: { position: "absolute", bottom: spacing.md, right: spacing.md, width: 44, height: 44, borderRadius: 22, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" },
-  micButtonActive: { backgroundColor: colors.danger },
-  actionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.sm },
-  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#E0E7FF", padding: spacing.md, borderRadius: radius.md, gap: spacing.xs },
-  actionBtnText: { fontSize: 14, fontWeight: "600", color: colors.accent },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: colors.text, marginBottom: spacing.sm },
-  historyContainer: { gap: spacing.sm },
-  historyCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  historyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
-  historyTextContainer: { flex: 1 },
-  historyClinic: { fontSize: 15, fontWeight: "600", color: colors.text },
-  historyDate: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.xl },
+  
+  profileRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  avatarText: { fontSize: 24, fontWeight: "800", color: "#FFF" },
+  greeting: { fontSize: 14, fontWeight: "500", color: colors.textMuted, marginBottom: 2 },
+  name: { fontSize: 22, fontWeight: "800", color: colors.text, letterSpacing: -0.5 },
+  
+  settingsBtn: { padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.full, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  
+  inputCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 4, marginBottom: spacing.xl },
+  assistantHeader: { flexDirection: "row", alignItems: "center", marginBottom: spacing.sm },
+  assistantAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: spacing.sm, backgroundColor: colors.accentMuted },
+  inputLabel: { fontSize: 16, fontWeight: "700", color: colors.text },
+  
+  input: { fontSize: 16, color: colors.text, lineHeight: 24, minHeight: 70 },
+  inputFooter: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
+  iconBtn: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: colors.accentMuted, alignItems: "center", justifyContent: "center" },
+
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.md },
+  triageGrid: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl },
+  triageCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2 },
+  triageIcon: { width: 56, height: 56, borderRadius: radius.full, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
+  triageTitle: { fontSize: 15, fontWeight: "600", color: colors.text },
+
+  actionRow: { flexDirection: "row", gap: spacing.md },
+  actionCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2, gap: spacing.sm },
+  actionText: { fontSize: 14, fontWeight: "600", color: colors.text },
 });

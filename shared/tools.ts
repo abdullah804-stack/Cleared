@@ -10,12 +10,16 @@ const SLOTS = [
   { slot_id: "slot-2", time: "2:00 PM" },
 ];
 
+// The fallback data in case GPS fails or you are in an area with no dentists
+const FALLBACK_CLINICS = [
+  { id: "c1", name: "Bright Smile Dental", price: 80, phone: "555-0101", address: "123 Main St" },
+  { id: "c2", name: "City Dental Care", price: 95, phone: "555-0102", address: "456 Oak Ave" },
+  { id: "c3", name: "Gentle Touch Dentistry", price: 70, phone: "555-0103", address: "789 Pine Rd" },
+];
+
 async function scheduleLocalAlerts(appointmentTime: Date) {
   if (Platform.OS === "web") return;
-  
-  // Dynamic import prevents Expo Go from crashing on boot
   const Notifications = await import("expo-notifications");
-
   await Notifications.setNotificationHandler({
     handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }),
   });
@@ -44,24 +48,40 @@ export async function executeTool(
         return { ok: true, output: JSON.stringify({ urgency: "routine", treatment_type: "cavity_check" }) };
 
       case "search_dentists": {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          return { ok: true, output: JSON.stringify([{ id: "c1", name: "City Dental", price: 80, phone: "555-0101", address: "123 Main St" }]) };
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            // If no permission, return fallback
+            return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
+          }
+          
+          const loc = await Location.getCurrentPositionAsync({});
+          
+          // If GPS returns 0,0 (ocean), return fallback
+          if (loc.coords.latitude === 0 && loc.coords.longitude === 0) {
+            return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
+          }
+
+          const query = `[out:json];node["amenity"="dentist"](around:5000,${loc.coords.latitude},${loc.coords.longitude});out 3;`;
+          const response = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", body: query });
+          const data = await response.json();
+          
+          // If API finds nothing, return fallback
+          if (!data.elements || data.elements.length === 0) {
+            return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
+          }
+
+          const clinics = data.elements.map((el: any, i: number) => ({
+            id: `osm-${el.id}`, name: el.tags.name || "Local Dental Clinic", price: 70 + (i * 15),
+            phone: el.tags.phone || "555-123-4567", address: el.tags["addr:street"] || "Address on file",
+            lat: el.lat, lon: el.lon,
+          }));
+          return { ok: true, output: JSON.stringify(clinics) };
+
+        } catch (e) {
+          // If anything crashes (no internet, timeout, etc), use fallback
+          return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
         }
-        const loc = await Location.getCurrentPositionAsync({});
-        const query = `[out:json];node["amenity"="dentist"](around:5000,${loc.coords.latitude},${loc.coords.longitude});out 3;`;
-        const response = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", body: query });
-        const data = await response.json();
-        
-        if (!data.elements || data.elements.length === 0) {
-          return { ok: true, output: JSON.stringify([{ id: "c1", name: "Bright Smile Dental", price: 90, phone: "555-0199", address: "456 Oak Ave" }]) };
-        }
-        const clinics = data.elements.map((el: any, i: number) => ({
-          id: `osm-${el.id}`, name: el.tags.name || "Local Dental Clinic", price: 70 + (i * 15),
-          phone: el.tags.phone || "555-123-4567", address: el.tags["addr:street"] || "Address on file",
-          lat: el.lat, lon: el.lon,
-        }));
-        return { ok: true, output: JSON.stringify(clinics) };
       }
 
       case "check_availability":

@@ -1,6 +1,6 @@
 // app/(auth)/login.tsx
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from "react-native";
+import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,24 +30,15 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleAuth = async () => {
-    setLoading(true);
-    try {
-      await signInWithGoogle();
-    } catch (error: any) {
-      Alert.alert("Google Login Failed", error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <Screen>
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.logoContainer}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="medical" size={40} color={colors.accent} />
-          </View>
+          <Image 
+            source={require("../../assets/images/icon.png")} 
+            style={styles.logoImage} 
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Cleared</Text>
           <Text style={styles.subtitle}>Approve the plan before the AI acts.</Text>
         </View>
@@ -86,17 +77,6 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-
-        <View style={styles.dividerContainer}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.divider} />
-        </View>
-
-        <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleAuth} disabled={loading}>
-          <Ionicons name="logo-google" size={20} color="#EA4335" />
-          <Text style={styles.googleBtnText}>Continue with Google</Text>
-        </TouchableOpacity>
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -105,7 +85,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center" },
   logoContainer: { alignItems: "center", marginBottom: spacing.xl },
-  iconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
+  logoImage: { width: 100, height: 100, marginBottom: spacing.md, borderRadius: 24 }, // Added border radius for modern look
   title: { fontSize: 32, fontWeight: "800", color: colors.text, letterSpacing: -1 },
   subtitle: { fontSize: 15, color: colors.textMuted, marginTop: spacing.xs },
   card: { backgroundColor: colors.surface, padding: spacing.lg, borderRadius: radius.md, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3, borderWidth: 1, borderColor: colors.border },
@@ -113,11 +93,4 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.md, marginBottom: spacing.md, fontSize: 16, color: colors.text },
   toggleContainer: { marginTop: spacing.lg, alignItems: "center" },
   toggleText: { color: colors.accent, fontSize: 14, fontWeight: "500" },
-  
-  dividerContainer: { flexDirection: "row", alignItems: "center", marginVertical: spacing.xl },
-  divider: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { marginHorizontal: spacing.md, color: colors.textMuted, fontSize: 12, fontWeight: "600" },
-  
-  googleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#FFF", borderWidth: 1, borderColor: colors.border, padding: spacing.md, borderRadius: radius.sm, gap: spacing.sm },
-  googleBtnText: { fontSize: 16, fontWeight: "600", color: colors.text },
 });
