@@ -1,39 +1,41 @@
 // app/plan.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, Text, View, ScrollView, Pressable, Switch, Linking, Alert, Platform } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { SkeletonLoader } from "../components/SkeletonLoader";
-import { colors, radius, spacing } from "../constants/theme";
+import { useThemeColors, ThemeColors, radius, spacing, shadows, glow, type } from "../constants/theme";
 import { useAgent } from "../hooks/useAgent";
 import { writeAudit } from "../shared/audit";
 import { useAuth } from "../contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
 const TOOL_ICONS: Record<string, any> = {
-  analyze_symptoms: "pulse", 
-  search_dentists: "search", 
+  analyze_symptoms: "pulse",
+  search_dentists: "search",
   check_availability: "calendar",
-  book_appointment: "checkmark-circle", 
-  prepare_visit_checklist: "list", 
+  book_appointment: "checkmark-circle",
+  prepare_visit_checklist: "list",
   schedule_reminder: "notifications",
 };
 
 export default function PlanScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { request } = useLocalSearchParams<{ request: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id || "demo-user-123";
-  
+
   const [stepByStep, setStepByStep] = useState(false);
 
   const { state, plan, approve, reject, skip, retry, resume, executeCurrent, removeStep, editStep } = useAgent({
     planEndpoint: "https://gevnakyvjxvnzasruzwh.supabase.co/functions/v1/plan",
     anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU",
-    userId, 
+    userId,
     userEmail: user?.email,
     onAudit: async (entry: any) => await writeAudit(userId, entry.type, entry.description, entry.detail),
   });
@@ -51,13 +53,13 @@ export default function PlanScreen() {
   }, [state.status, router]);
 
   const handleEditBudget = (stepId: string, currentBudget: number) => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       Alert.prompt(
         "Edit Budget",
         "Enter new max price ($)",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Save", onPress: (val) => { if (val) editStep(stepId, { max_price: Number(val) }); } }
+          { text: "Save", onPress: (val) => { if (val) editStep(stepId, { max_price: Number(val) }); } },
         ],
         "plain-text",
         String(currentBudget)
@@ -72,15 +74,15 @@ export default function PlanScreen() {
   };
 
   const renderStep = (step: any, index: number) => {
-    let statusColor = colors.border; 
-    let statusText = "Pending"; 
+    let statusColor = colors.border;
+    let statusText = "Pending";
     let iconColor = colors.textMuted;
 
     if (state.status === "EXECUTING" || state.status === "STEP_FAILED" || state.status === "COMPLETED" || state.status === "PAUSED") {
       const currentIdx = "currentIndex" in state ? state.currentIndex : state.plan.length;
       if (index < currentIdx) {
         const result = state.results[index];
-        if (result?.status === "success") { statusColor = "#10B981"; statusText = "Done"; iconColor = "#10B981"; }
+        if (result?.status === "success") { statusColor = colors.success; statusText = "Done"; iconColor = colors.success; }
         else if (result?.status === "failure") { statusColor = colors.danger; statusText = "Failed"; iconColor = colors.danger; }
       } else if (index === currentIdx && state.status !== "PAUSED") {
         if (state.status === "EXECUTING") { statusColor = colors.accent; statusText = "Running..."; iconColor = colors.accent; }
@@ -88,22 +90,30 @@ export default function PlanScreen() {
       }
     }
 
+    const isPending = statusColor === colors.border;
     const isEditing = state.status === "AWAITING_APPROVAL";
     const isClinic = step.tool === "search_dentists";
 
     return (
-      <Animated.View key={step.id} entering={FadeInDown.delay(index * 100).springify()} style={[styles.stepCard, index === ("currentIndex" in state ? state.currentIndex : -1) && styles.activeCard]}>
+      <Animated.View
+        key={step.id}
+        entering={FadeInDown.delay(index * 100).springify()}
+        style={[styles.stepCard, index === ("currentIndex" in state ? state.currentIndex : -1) && styles.activeCard]}
+      >
         <View style={styles.stepHeader}>
-          <View style={[styles.iconBox, { backgroundColor: statusColor === colors.border ? colors.background : `${statusColor}15` }]}>
+          <View style={[styles.iconBox, { backgroundColor: isPending ? colors.surfaceAlt : `${statusColor}1F` }]}>
             <Ionicons name={TOOL_ICONS[step.tool] || "build"} size={20} color={iconColor} />
           </View>
           <View style={styles.stepTextContainer}>
+            <View style={[styles.statusPill, { backgroundColor: isPending ? colors.surfaceAlt : `${statusColor}1F` }]}>
+              <Text style={[styles.stepMeta, { color: iconColor }]}>{statusText}</Text>
+            </View>
             <Text style={styles.stepDescription}>{step.description}</Text>
-            <Text style={[styles.stepMeta, { color: iconColor }]}>{statusText}</Text>
             <Text style={styles.stepImpact}>Why: {step.estimatedImpact}</Text>
-            
+
             {isClinic && step.args.max_price && (
               <View style={styles.budgetBadge}>
+                <Ionicons name="wallet-outline" size={13} color={colors.success} />
                 <Text style={styles.budgetText}>Budget: ${step.args.max_price}</Text>
               </View>
             )}
@@ -111,26 +121,26 @@ export default function PlanScreen() {
             {isClinic && state.status === "COMPLETED" && (
               <View style={styles.clinicActions}>
                 <Pressable style={styles.clinicBtn} onPress={() => Linking.openURL(`tel:555-123-4567`)}>
-                  <Ionicons name="call" size={14} color={colors.accent} />
+                  <Ionicons name="call" size={14} color={colors.accentStrong} />
                   <Text style={styles.clinicBtnText}>Call Clinic</Text>
                 </Pressable>
                 <Pressable style={styles.clinicBtn} onPress={() => Linking.openURL(`https://maps.google.com/?q=dentist`)}>
-                  <Ionicons name="map" size={14} color={colors.accent} />
+                  <Ionicons name="map" size={14} color={colors.accentStrong} />
                   <Text style={styles.clinicBtnText}>Directions</Text>
                 </Pressable>
               </View>
             )}
           </View>
-          
+
           {isEditing && (
             <View style={styles.editActions}>
               {isClinic && (
                 <Pressable onPress={() => handleEditBudget(step.id, step.args.max_price || 100)} style={styles.actionBtn}>
-                  <Ionicons name="pencil" size={18} color={colors.accent} />
+                  <Ionicons name="pencil" size={16} color={colors.accentStrong} />
                 </Pressable>
               )}
               <Pressable onPress={() => removeStep(step.id)} style={styles.actionBtn}>
-                <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
               </Pressable>
             </View>
           )}
@@ -141,15 +151,18 @@ export default function PlanScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {state.status === "PLANNING" && <SkeletonLoader />}
 
         {state.status === "PAUSED" && (
           <View style={styles.pausedContainer}>
-            <Ionicons name="pause-circle" size={64} color={colors.accent} />
+            <View style={styles.pausedIcon}>
+              <Ionicons name="pause" size={36} color={colors.accentStrong} />
+            </View>
             <Text style={styles.pausedTitle}>Plan Paused</Text>
             <Text style={styles.pausedText}>
-              Step-by-step approval is on. The next step is: <Text style={{fontWeight: "bold"}}>{state.plan[state.currentIndex]?.description}</Text>
+              Step-by-step approval is on. The next step is:{" "}
+              <Text style={{ fontWeight: "700", color: colors.text }}>{state.plan[state.currentIndex]?.description}</Text>
             </Text>
             <Button title="Resume Next Step" onPress={resume} style={{ marginTop: spacing.lg, width: "100%" }} />
             <Button title="Abort Run" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.sm, width: "100%" }} />
@@ -158,19 +171,29 @@ export default function PlanScreen() {
 
         {(state.status === "AWAITING_APPROVAL" || state.status === "EXECUTING" || state.status === "STEP_FAILED" || state.status === "COMPLETED") && (
           <View style={styles.planContainer}>
+            <Text style={styles.overline}>{state.status === "AWAITING_APPROVAL" ? "Your care plan" : "Live progress"}</Text>
             <Text style={styles.sectionTitle}>{state.status === "AWAITING_APPROVAL" ? "Review Plan" : "Agent Trace"}</Text>
-            
+
             {state.status === "AWAITING_APPROVAL" && (
               <>
                 <View style={styles.dataPanel}>
-                  <Ionicons name="information-circle" size={20} color={colors.accent} />
+                  <Ionicons name="shield-checkmark" size={20} color={colors.accentStrong} />
                   <Text style={styles.dataPanelText}>
                     What leaves this device: Your text prompt and approximate location will be sent to OpenRouter AI to generate this plan.
                   </Text>
                 </View>
                 <View style={styles.toggleRow}>
-                  <Text style={styles.toggleText}>Step-by-Step Mode</Text>
-                  <Switch value={stepByStep} onValueChange={setStepByStep} trackColor={{ true: colors.accent }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.toggleText}>Step-by-Step Mode</Text>
+                    <Text style={styles.toggleSub}>Approve each action before it runs</Text>
+                  </View>
+                  <Switch
+                    value={stepByStep}
+                    onValueChange={setStepByStep}
+                    trackColor={{ true: colors.accent, false: colors.border }}
+                    thumbColor="#FFFFFF"
+                    ios_backgroundColor={colors.border}
+                  />
                 </View>
               </>
             )}
@@ -204,40 +227,143 @@ export default function PlanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { flexGrow: 1, paddingBottom: 160 },
-  planContainer: { marginTop: spacing.md },
-  sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.md },
-  dataPanel: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: "#E0E7FF", padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.md },
-  dataPanelText: { flex: 1, fontSize: 13, color: "#3730A3", lineHeight: 18 },
-  toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
-  toggleText: { fontSize: 15, fontWeight: "600", color: colors.text },
-  stepsList: { gap: spacing.sm },
-  stepCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
-  activeCard: { borderColor: colors.accent, shadowColor: colors.accent, shadowOpacity: 0.1, elevation: 3 },
-  stepHeader: { flexDirection: "row", alignItems: "flex-start" },
-  iconBox: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
-  stepTextContainer: { flex: 1 },
-  stepDescription: { fontSize: 15, fontWeight: "500", color: colors.text, marginBottom: 4 },
-  stepMeta: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", marginBottom: 6 },
-  stepImpact: { fontSize: 13, color: colors.textMuted, fontStyle: "italic", lineHeight: 18, marginBottom: spacing.sm },
-  
-  budgetBadge: { backgroundColor: "#F0FDF4", alignSelf: "flex-start", paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm, marginBottom: spacing.sm },
-  budgetText: { fontSize: 13, fontWeight: "700", color: "#166534" },
-  
-  editActions: { flexDirection: "row", gap: spacing.sm, marginLeft: spacing.sm },
-  actionBtn: { padding: spacing.xs, backgroundColor: "#F3F4F6", borderRadius: radius.full },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    scroll: { flexGrow: 1, paddingBottom: 200 },
+    planContainer: { marginTop: spacing.md },
+    overline: { ...type.overline, color: colors.accentStrong, marginBottom: 4 },
+    sectionTitle: { ...type.title, color: colors.text, marginBottom: spacing.md },
 
-  clinicActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
-  clinicBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#E0E7FF", paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.full },
-  clinicBtnText: { fontSize: 12, fontWeight: "600", color: colors.accent },
+    dataPanel: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm + 2,
+      backgroundColor: colors.accentMuted,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      marginBottom: spacing.md,
+    },
+    dataPanelText: { flex: 1, fontSize: 13, color: colors.accentStrong, lineHeight: 19, fontWeight: "500" },
 
-  pausedContainer: { alignItems: "center", justifyContent: "center", marginTop: 100, padding: spacing.xl, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  pausedTitle: { fontSize: 22, fontWeight: "800", color: colors.text, marginTop: spacing.md, marginBottom: spacing.sm },
-  pausedText: { fontSize: 15, color: colors.textMuted, textAlign: "center", lineHeight: 22 },
+    toggleRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: spacing.lg,
+      ...shadows.sm,
+    },
+    toggleText: { fontSize: 15, fontWeight: "600", color: colors.text },
+    toggleSub: { ...type.caption, color: colors.textMuted, marginTop: 2 },
 
-  footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.md, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
-  row: { flexDirection: "row", gap: spacing.md },
-  flexButton: { flex: 1 },
-  errorFooter: { gap: spacing.sm }
-});
+    stepsList: { gap: spacing.md },
+    stepCard: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      ...shadows.sm,
+    },
+    activeCard: { borderColor: colors.accent, borderWidth: 1.5, ...glow(colors.accent, 0.18) },
+    stepHeader: { flexDirection: "row", alignItems: "flex-start" },
+    iconBox: {
+      width: 42,
+      height: 42,
+      borderRadius: radius.sm + 4,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: spacing.md,
+    },
+    stepTextContainer: { flex: 1 },
+    statusPill: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: radius.full,
+      marginBottom: 6,
+    },
+    stepMeta: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
+    stepDescription: { fontSize: 15, fontWeight: "600", color: colors.text, lineHeight: 21, marginBottom: 4, letterSpacing: -0.1 },
+    stepImpact: { fontSize: 13, color: colors.textMuted, lineHeight: 19, marginBottom: spacing.xs },
+
+    budgetBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.successMuted,
+      alignSelf: "flex-start",
+      paddingHorizontal: spacing.sm + 2,
+      paddingVertical: 5,
+      borderRadius: radius.full,
+      marginTop: spacing.xs,
+    },
+    budgetText: { fontSize: 12, fontWeight: "700", color: colors.success },
+
+    editActions: { flexDirection: "row", gap: spacing.sm, marginLeft: spacing.sm },
+    actionBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: radius.full,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    clinicActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+    clinicBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.accentMuted,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: radius.full,
+    },
+    clinicBtnText: { fontSize: 12, fontWeight: "600", color: colors.accentStrong },
+
+    pausedContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 80,
+      padding: spacing.xl,
+      backgroundColor: colors.surface,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.md,
+    },
+    pausedIcon: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.accentMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    pausedTitle: { ...type.title, color: colors.text, marginTop: spacing.md, marginBottom: spacing.sm },
+    pausedText: { fontSize: 15, color: colors.textMuted, textAlign: "center", lineHeight: 22 },
+
+    footer: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: spacing.md,
+      paddingBottom: 32,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      ...shadows.lg,
+    },
+    row: { flexDirection: "row", gap: spacing.md },
+    flexButton: { flex: 1 },
+    errorFooter: { gap: spacing.sm },
+  });
