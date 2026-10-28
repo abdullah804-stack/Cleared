@@ -16,14 +16,12 @@ export default function ConsentScreen() {
   const handleAgree = async () => {
     if (!agreed) return;
     
-    try {
-      // Try to save, but don't let it block the navigation
-      SecureStore.setItemAsync("has_consented", "true").catch(console.error);
-      AsyncStorage.setItem("has_consented", "true").catch(console.error);
-    } finally {
-      // Force navigation no matter what
-      router.replace("/(auth)/login");
-    }
+    // Save to local storage in the background
+    SecureStore.setItemAsync("has_consented", "true").catch(() => {});
+    AsyncStorage.setItem("has_consented", "true").catch(() => {});
+    
+    // Force navigate immediately
+    router.replace("/(auth)/login");
   };
 
   return (
