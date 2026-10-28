@@ -1,59 +1,39 @@
 // app/_layout.tsx
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
-import * as SecureStore from "expo-secure-store";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { initAuditDb } from "../shared/audit";
 import { initJournalDb } from "../shared/journal";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { LanguageProvider } from "../contexts/LanguageContext";
+import { ConsentProvider, useConsent } from "../contexts/ConsentContext";
 import { BiometricGate } from "../components/BiometricGate";
-import { colors } from "../constants/theme";
+import { useThemeColors } from "../constants/theme";
 
 function RootLayoutNav() {
+  const colors = useThemeColors();
   const { user, loading } = useAuth();
+  const { hasConsent, checking: checkingConsent } = useConsent();
   const segments = useSegments();
   const router = useRouter();
-  const [checkingConsent, setCheckingConsent] = useState(true);
-  const [hasConsent, setHasConsent] = useState(false);
 
-  // 1. Check Consent
-  useEffect(() => {
-    async function check() {
-      try {
-        const secureConsent = await SecureStore.getItemAsync("has_consented");
-        const asyncConsent = await AsyncStorage.getItem("has_consented");
-        
-        const consented = secureConsent === "true" || asyncConsent === "true";
-        setHasConsent(consented);
-      } catch (e) {
-        console.error("Consent read error", e);
-      } finally {
-        setCheckingConsent(false);
-      }
-    }
-    check();
-  }, []);
-
-  // 2. Handle Navigation
+  // Handle navigation
   useEffect(() => {
     if (loading || checkingConsent) return;
-    
-    // The segments array tells us exactly which screen we are on
+
     const inAuthGroup = segments[0] === "(auth)";
     const inConsent = segments[0] === "consent";
 
-    // If no consent and not on consent screen -> go to consent
+    // No consent yet -> consent screen
     if (!hasConsent && !inConsent) {
       router.replace("/consent");
-    } 
-    // If consent is given but no user and not on auth screen -> go to login
+    }
+    // Consent given, not signed in -> login
     else if (hasConsent && !user && !inAuthGroup) {
       router.replace("/(auth)/login");
-    } 
-    // If user is logged in and consent is given, but we are still on auth/consent -> go to home
+    }
+    // Consent given and signed in, but still on auth/consent -> home
     else if (hasConsent && user && (inAuthGroup || inConsent)) {
       router.replace("/");
     }
@@ -68,7 +48,16 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ headerStyle: { backgroundColor: colors.surface }, headerShadowVisible: false, headerTintColor: colors.text, contentStyle: { backgroundColor: colors.background }, animation: "fade" }}>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerShadowVisible: false,
+        headerTintColor: colors.text,
+        headerTitleStyle: { fontWeight: "700" },
+        contentStyle: { backgroundColor: colors.background },
+        animation: "fade",
+      }}
+    >
       <Stack.Screen name="consent" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -92,10 +81,12 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <BiometricGate>
-          <StatusBar style="auto" />
-          <RootLayoutNav />
-        </BiometricGate>
+        <ConsentProvider>
+          <BiometricGate>
+            <StatusBar style="auto" />
+            <RootLayoutNav />
+          </BiometricGate>
+        </ConsentProvider>
       </LanguageProvider>
     </AuthProvider>
   );
