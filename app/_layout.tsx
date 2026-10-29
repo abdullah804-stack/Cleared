@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
@@ -10,6 +10,32 @@ import { LanguageProvider } from "../contexts/LanguageContext";
 import { ConsentProvider, useConsent } from "../contexts/ConsentContext";
 import { BiometricGate } from "../components/BiometricGate";
 import { useThemeColors } from "../constants/theme";
+
+function Splash() {
+  const colors = useThemeColors();
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+      <ActivityIndicator size="large" color={colors.accent} />
+    </View>
+  );
+}
+
+/**
+ * Locks the app with fingerprint/face ONLY when it was opened with an existing
+ * signed-in session. First-time users (and people who just signed in) are never
+ * prompted before they have anything to protect.
+ */
+function GatedApp({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  const [lockOnLaunch, setLockOnLaunch] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!loading && lockOnLaunch === null) setLockOnLaunch(!!user);
+  }, [loading, user, lockOnLaunch]);
+
+  if (lockOnLaunch === null) return <Splash />;
+  return <BiometricGate enabled={lockOnLaunch}>{children}</BiometricGate>;
+}
 
 function RootLayoutNav() {
   const colors = useThemeColors();
@@ -39,13 +65,7 @@ function RootLayoutNav() {
     }
   }, [user, loading, hasConsent, checkingConsent, segments]);
 
-  if (loading || checkingConsent) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
-  }
+  if (loading || checkingConsent) return <Splash />;
 
   return (
     <Stack
@@ -82,10 +102,10 @@ export default function RootLayout() {
     <AuthProvider>
       <LanguageProvider>
         <ConsentProvider>
-          <BiometricGate>
+          <GatedApp>
             <StatusBar style="auto" />
             <RootLayoutNav />
-          </BiometricGate>
+          </GatedApp>
         </ConsentProvider>
       </LanguageProvider>
     </AuthProvider>

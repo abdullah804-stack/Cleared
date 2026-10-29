@@ -1,16 +1,30 @@
 // app/appointment.tsx
 import { useState, useEffect, useMemo } from "react";
-import { StyleSheet, Text, View, ScrollView, Pressable, Platform } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Linking, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence } from "react-native-reanimated";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { useThemeColors, ThemeColors, radius, spacing, shadows, glow, type } from "../constants/theme";
+import { BOOKINGS_ARE_SIMULATED } from "../constants/config";
+import { sendTestNotification } from "../utils/notifications";
 import { Ionicons } from "@expo/vector-icons";
+
+interface Booking {
+  confirmation_id?: string;
+  appointment_time: string;
+  clinic?: { name: string; phone?: string; address?: string; lat?: number; lon?: number; demo?: boolean };
+}
+
+const tomorrowAt10 = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(10, 0, 0, 0);
+  return d;
+};
 
 export default function AppointmentScreen() {
   const colors = useThemeColors();
@@ -22,15 +36,9 @@ export default function AppointmentScreen() {
   const scale = useSharedValue(0);
   const animatedIconStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  const [appointmentTime, setAppointmentTime] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(10, 0, 0, 0);
-    return d;
-  });
-
-  const [showPicker, setShowPicker] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(appointmentTime.getTime() - Date.now());
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [appointmentTime, setAppointmentTime] = useState<Date>(tomorrowAt10);
+  const [timeLeft, setTimeLeft] = useState(() => tomorrowAt10().getTime() - Date.now());
 
   const [carePlan, setCarePlan] = useState<string[]>([]);
   const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
@@ -42,16 +50,38 @@ export default function AppointmentScreen() {
       withSpring(1, { damping: 10, stiffness: 100 })
     );
 
-    const loadCarePlan = async () => {
-      const savedPlan = await AsyncStorage.getItem("current_care_plan");
-      const savedChecks = await AsyncStorage.getItem("care_plan_checks");
+    (async () => {
+      const [savedPlan, savedChecks, savedBooking] = await Promise.all([
+        AsyncStorage.getItem("current_care_plan"),
+        AsyncStorage.getItem("care_plan_checks"),
+        AsyncStorage.getItem("current_booking"),
+      ]);
 
-      if (savedPlan) setCarePlan(JSON.parse(savedPlan));
-      else setCarePlan(["Avoid very cold or hot foods until evaluated.", "Use desensitizing toothpaste and avoid hard chewing."]);
+      try {
+        const parsed = savedPlan ? JSON.parse(savedPlan) : null;
+        setCarePlan(Array.isArray(parsed) && parsed.length ? parsed : ["Avoid very cold or hot foods until evaluated.", "Use desensitizing toothpaste and avoid hard chewing."]);
+      } catch {
+        setCarePlan(["Avoid very cold or hot foods until evaluated.", "Use desensitizing toothpaste and avoid hard chewing."]);
+      }
 
-      if (savedChecks) setCheckedItems(JSON.parse(savedChecks));
-    };
-    loadCarePlan();
+      try {
+        if (savedChecks) setCheckedItems(JSON.parse(savedChecks));
+      } catch {}
+
+      // Use the REAL booking (clinic + time). This screen used to always show
+      // "Bright Smile Dental, tomorrow 10:00" no matter what was booked.
+      try {
+        if (savedBooking) {
+          const b: Booking = JSON.parse(savedBooking);
+          const t = new Date(b.appointment_time);
+          if (!isNaN(t.getTime())) {
+            setBooking(b);
+            setAppointmentTime(t);
+            setTimeLeft(Math.max(0, t.getTime() - Date.now()));
+          }
+        }
+      } catch {}
+    })();
   }, []);
 
   useEffect(() => {
@@ -77,19 +107,13 @@ export default function AppointmentScreen() {
     await AsyncStorage.setItem("care_plan_checks", JSON.stringify(newChecked));
   };
 
-  const onTimeChange = async (event: any, selectedDate?: Date) => {
-    setShowPicker(Platform.OS === "ios");
-    if (selectedDate) {
-      setAppointmentTime(selectedDate);
-      const Notifications = await import("expo-notifications");
-
-      const testTrigger = new Date(selectedDate);
-      testTrigger.setMinutes(testTrigger.getMinutes() + 1);
-      await Notifications.scheduleNotificationAsync({
-        content: { title: "Test Alert!", body: "This proves the notification system works." },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: testTrigger },
-      });
+  const handleTestNotification = async () => {
+    const ok = await sendTestNotification();
+    if (ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Test sent", "You'll get a notification in about 5 seconds. Press Home to see it arrive.");
+    } else {
+      Alert.alert("Notifications are off", "Turn on notifications for Cleared in your phone's Settings to get appointment reminders.");
     }
   };
 
@@ -99,11 +123,21 @@ export default function AppointmentScreen() {
       Speech.stop();
       setIsSpeaking(false);
     } else {
-      const text = carePlan.join(". ");
-      Speech.speak(text, { onDone: () => setIsSpeaking(false) });
+      Speech.speak(carePlan.join(". "), { onDone: () => setIsSpeaking(false), onStopped: () => setIsSpeaking(false) });
       setIsSpeaking(true);
     }
   };
+
+  // Stop speaking if the user leaves the screen
+  useEffect(() => () => { Speech.stop(); }, []);
+
+  const clinic = booking?.clinic;
+  const canCall = !!clinic?.phone && !clinic?.demo;
+  const directionsUrl = clinic && !clinic.demo
+    ? clinic.lat != null && clinic.lon != null
+      ? `https://maps.google.com/?q=${clinic.lat},${clinic.lon}`
+      : `https://maps.google.com/?q=${encodeURIComponent(`${clinic.name} ${clinic.address ?? ""}`)}`
+    : null;
 
   return (
     <Screen>
@@ -114,12 +148,21 @@ export default function AppointmentScreen() {
               <Ionicons name="checkmark" size={36} color={colors.onAccent} />
             </Animated.View>
           </View>
-          <Text style={styles.title}>Booked Successfully</Text>
+          <Text style={styles.title}>{BOOKINGS_ARE_SIMULATED ? "Demo booking complete" : "Booked Successfully"}</Text>
           <View style={styles.clinicPill}>
             <Ionicons name="location" size={13} color={colors.accentStrong} />
-            <Text style={styles.subtitle}>Bright Smile Dental</Text>
+            <Text style={styles.subtitle}>{clinic?.name ?? "Your dental clinic"}</Text>
           </View>
         </View>
+
+        {BOOKINGS_ARE_SIMULATED && (
+          <View style={styles.demoBanner}>
+            <Ionicons name="information-circle" size={20} color="#B45309" />
+            <Text style={styles.demoText}>
+              Demo mode: this booking is simulated. No clinic has been contacted, so please don't rely on it for a real appointment.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.ticket}>
           <View style={styles.ticketAccent} />
@@ -133,19 +176,28 @@ export default function AppointmentScreen() {
                 {appointmentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </Text>
             </View>
+            {booking?.confirmation_id && <Text style={styles.confirmation}>Ref {booking.confirmation_id}</Text>}
           </View>
         </View>
 
-        <Button
-          title="Test Notifications (Change Time)"
-          variant="ghost"
-          onPress={() => setShowPicker(true)}
-          style={{ marginBottom: spacing.lg }}
-        />
-
-        {showPicker && (
-          <DateTimePicker value={appointmentTime} mode="datetime" display="default" onChange={onTimeChange} />
+        {(canCall || directionsUrl) && (
+          <View style={styles.clinicActions}>
+            {canCall && (
+              <Pressable style={styles.clinicBtn} onPress={() => Linking.openURL(`tel:${clinic!.phone}`)}>
+                <Ionicons name="call" size={16} color={colors.accentStrong} />
+                <Text style={styles.clinicBtnText}>Call clinic</Text>
+              </Pressable>
+            )}
+            {directionsUrl && (
+              <Pressable style={styles.clinicBtn} onPress={() => Linking.openURL(directionsUrl)}>
+                <Ionicons name="map" size={16} color={colors.accentStrong} />
+                <Text style={styles.clinicBtnText}>Directions</Text>
+              </Pressable>
+            )}
+          </View>
         )}
+
+        <Button title="Send a test notification" variant="ghost" onPress={handleTestNotification} style={{ marginBottom: spacing.lg }} />
 
         <View style={styles.carePlanCard}>
           <View style={styles.carePlanHeader}>
@@ -176,6 +228,8 @@ export default function AppointmentScreen() {
               <Text style={[styles.careItemDesc, checkedItems[index] && styles.careItemDone]}>{item}</Text>
             </Pressable>
           ))}
+
+          <Text style={styles.carePlanNote}>General guidance only, not medical advice. Ask your dentist about anything that worries you.</Text>
         </View>
       </ScrollView>
 
@@ -191,7 +245,7 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     scroll: { flexGrow: 1, paddingBottom: 170 },
 
-    successHeader: { alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.xl },
+    successHeader: { alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.lg },
     checkHalo: {
       width: 104,
       height: 104,
@@ -210,7 +264,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "center",
       ...glow(colors.success, 0.35),
     },
-    title: { ...type.title, fontSize: 26, color: colors.text, marginBottom: spacing.sm },
+    title: { ...type.title, fontSize: 26, color: colors.text, marginBottom: spacing.sm, textAlign: "center" },
     clinicPill: {
       flexDirection: "row",
       alignItems: "center",
@@ -221,6 +275,19 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: radius.full,
     },
     subtitle: { fontSize: 14, fontWeight: "600", color: colors.accentStrong },
+
+    demoBanner: {
+      flexDirection: "row",
+      gap: spacing.sm + 2,
+      alignItems: "flex-start",
+      backgroundColor: "#F59E0B1F",
+      borderWidth: 1,
+      borderColor: "#F59E0B55",
+      padding: spacing.md,
+      borderRadius: radius.md,
+      marginBottom: spacing.md,
+    },
+    demoText: { flex: 1, fontSize: 13, lineHeight: 19, color: colors.text, fontWeight: "500" },
 
     ticket: {
       backgroundColor: colors.surface,
@@ -252,6 +319,20 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: radius.full,
     },
     appointmentDate: { fontSize: 13, fontWeight: "600", color: colors.accentStrong },
+    confirmation: { ...type.caption, color: colors.textMuted, marginTop: spacing.md },
+
+    clinicActions: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+    clinicBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      height: 48,
+      backgroundColor: colors.accentMuted,
+      borderRadius: radius.md,
+    },
+    clinicBtnText: { fontSize: 14, fontWeight: "600", color: colors.accentStrong },
 
     carePlanCard: {
       backgroundColor: colors.surface,
@@ -284,6 +365,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     careItemDesc: { flex: 1, fontSize: 15, color: colors.text, lineHeight: 22 },
     careItemDone: { textDecorationLine: "line-through", color: colors.textMuted },
+    carePlanNote: { ...type.caption, color: colors.textMuted, marginTop: spacing.md },
 
     footer: {
       position: "absolute",

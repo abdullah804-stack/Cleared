@@ -1,12 +1,25 @@
 // app/plan.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { StyleSheet, Text, View, ScrollView, Pressable, Switch, Linking, Alert, Platform } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  Pressable,
+  Switch,
+  Linking,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+} from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { SkeletonLoader } from "../components/SkeletonLoader";
 import { useThemeColors, ThemeColors, radius, spacing, shadows, glow, type } from "../constants/theme";
+import { SUPABASE_ANON_KEY, PLAN_ENDPOINT } from "../constants/config";
+import { getDefaultCurrency, formatMoney } from "../constants/pricing";
 import { useAgent } from "../hooks/useAgent";
 import { writeAudit } from "../shared/audit";
 import { useAuth } from "../contexts/AuthContext";
@@ -19,6 +32,7 @@ const TOOL_ICONS: Record<string, any> = {
   book_appointment: "checkmark-circle",
   prepare_visit_checklist: "list",
   schedule_reminder: "notifications",
+  generate_care_plan: "document-text",
 };
 
 export default function PlanScreen() {
@@ -28,21 +42,33 @@ export default function PlanScreen() {
   const { request } = useLocalSearchParams<{ request: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const userId = user?.id || "demo-user-123";
+  const userId = user?.id ?? "anonymous"; // must match the id the Audit screen reads
+  const currency = getDefaultCurrency();
 
   const [stepByStep, setStepByStep] = useState(false);
+  const [budgetEdit, setBudgetEdit] = useState<{ id: string; value: string } | null>(null);
 
-  const { state, plan, approve, reject, skip, retry, resume, executeCurrent, removeStep, editStep } = useAgent({
-    planEndpoint: "https://gevnakyvjxvnzasruzwh.supabase.co/functions/v1/plan",
-    anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU",
+  const { state, plan, approve, reject, skip, retry, resume, abort, executeCurrent, removeStep, editStep } = useAgent({
+    planEndpoint: PLAN_ENDPOINT,
+    anonKey: SUPABASE_ANON_KEY,
     userId,
     userEmail: user?.email,
     onAudit: async (entry: any) => await writeAudit(userId, entry.type, entry.description, entry.detail),
   });
 
+  // Start planning ONCE per visit. (Before, cancelling reset the state to IDLE and this effect
+  // immediately started a brand-new plan, so "Cancel" never actually cancelled.)
+  const startedRef = useRef(false);
   useEffect(() => {
-    if (request && state.status === "IDLE") plan(request);
+    if (request && !startedRef.current && state.status === "IDLE") {
+      startedRef.current = true;
+      plan(request);
+    }
   }, [request, state.status, plan]);
+
+  const retryPlan = () => {
+    if (request) plan(request);
+  };
 
   useEffect(() => {
     if (state.status === "EXECUTING" && "currentIndex" in state) executeCurrent();
@@ -52,25 +78,17 @@ export default function PlanScreen() {
     if (state.status === "COMPLETED") router.replace("/appointment");
   }, [state.status, router]);
 
+  // Works on Android AND iOS (Alert.prompt is iOS-only, so Android users could never edit the budget)
   const handleEditBudget = (stepId: string, currentBudget: number) => {
-    if (Platform.OS === "ios") {
-      Alert.prompt(
-        "Edit Budget",
-        "Enter new max price ($)",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Save", onPress: (val) => { if (val) editStep(stepId, { max_price: Number(val) }); } },
-        ],
-        "plain-text",
-        String(currentBudget)
-      );
-    } else {
-      Alert.alert(
-        "Edit Budget",
-        `Current budget is $${currentBudget}. To change it, please type the new amount in the home screen.`,
-        [{ text: "OK" }]
-      );
-    }
+    setBudgetEdit({ id: stepId, value: String(currentBudget) });
+  };
+
+  const saveBudget = () => {
+    if (!budgetEdit) return;
+    const n = Number(budgetEdit.value);
+    if (!Number.isFinite(n) || n <= 0) return;
+    editStep(budgetEdit.id, { max_price: n });
+    setBudgetEdit(null);
   };
 
   const renderStep = (step: any, index: number) => {
@@ -114,7 +132,7 @@ export default function PlanScreen() {
             {isClinic && step.args.max_price && (
               <View style={styles.budgetBadge}>
                 <Ionicons name="wallet-outline" size={13} color={colors.success} />
-                <Text style={styles.budgetText}>Budget: ${step.args.max_price}</Text>
+                <Text style={styles.budgetText}>Budget: {formatMoney(Number(step.args.max_price), currency)}</Text>
               </View>
             )}
 
@@ -135,11 +153,15 @@ export default function PlanScreen() {
           {isEditing && (
             <View style={styles.editActions}>
               {isClinic && (
-                <Pressable onPress={() => handleEditBudget(step.id, step.args.max_price || 100)} style={styles.actionBtn}>
+                <Pressable
+                  onPress={() => handleEditBudget(step.id, step.args.max_price || 100)}
+                  style={styles.actionBtn}
+                  accessibilityLabel="Edit budget"
+                >
                   <Ionicons name="pencil" size={16} color={colors.accentStrong} />
                 </Pressable>
               )}
-              <Pressable onPress={() => removeStep(step.id)} style={styles.actionBtn}>
+              <Pressable onPress={() => removeStep(step.id)} style={styles.actionBtn} accessibilityLabel="Remove step">
                 <Ionicons name="trash-outline" size={16} color={colors.danger} />
               </Pressable>
             </View>
@@ -154,6 +176,19 @@ export default function PlanScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {state.status === "PLANNING" && <SkeletonLoader />}
 
+        {/* Before, a failed plan (no internet, bad AI reply) left a blank screen with no way out. */}
+        {state.status === "FAILED_PLANNING" && (
+          <View style={styles.failedContainer}>
+            <View style={styles.failedIcon}>
+              <Ionicons name="cloud-offline-outline" size={36} color={colors.danger} />
+            </View>
+            <Text style={styles.pausedTitle}>Couldn't build your plan</Text>
+            <Text style={styles.pausedText}>{state.reason}</Text>
+            <Button title="Try again" onPress={retryPlan} style={{ marginTop: spacing.lg, width: "100%" }} />
+            <Button title="Go back" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.sm, width: "100%" }} />
+          </View>
+        )}
+
         {state.status === "PAUSED" && (
           <View style={styles.pausedContainer}>
             <View style={styles.pausedIcon}>
@@ -165,7 +200,15 @@ export default function PlanScreen() {
               <Text style={{ fontWeight: "700", color: colors.text }}>{state.plan[state.currentIndex]?.description}</Text>
             </Text>
             <Button title="Resume Next Step" onPress={resume} style={{ marginTop: spacing.lg, width: "100%" }} />
-            <Button title="Abort Run" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.sm, width: "100%" }} />
+            <Button
+              title="Abort Run"
+              variant="ghost"
+              onPress={() => {
+                abort();
+                router.back();
+              }}
+              style={{ marginTop: spacing.sm, width: "100%" }}
+            />
           </View>
         )}
 
@@ -208,7 +251,15 @@ export default function PlanScreen() {
       <Animated.View entering={FadeInUp.delay(300)} style={styles.footer}>
         {state.status === "AWAITING_APPROVAL" && (
           <View style={styles.row}>
-            <Button title="Cancel" variant="ghost" onPress={reject} style={styles.flexButton} />
+            <Button
+              title="Cancel"
+              variant="ghost"
+              onPress={() => {
+                reject();
+                router.back();
+              }}
+              style={styles.flexButton}
+            />
             <Button title="Approve & Execute" onPress={() => approve(stepByStep)} style={styles.flexButton} />
           </View>
         )}
@@ -216,13 +267,48 @@ export default function PlanScreen() {
         {state.status === "STEP_FAILED" && (
           <View style={styles.errorFooter}>
             <View style={styles.row}>
-              <Button title="Abort" variant="danger" onPress={() => router.back()} style={styles.flexButton} />
+              <Button
+                title="Abort"
+                variant="danger"
+                onPress={() => {
+                  abort();
+                  router.back();
+                }}
+                style={styles.flexButton}
+              />
               <Button title="Retry Step" onPress={retry} style={styles.flexButton} />
             </View>
             <Button title="Skip & Continue" variant="ghost" onPress={skip} style={{ marginTop: spacing.sm }} />
           </View>
         )}
       </Animated.View>
+
+      <Modal visible={!!budgetEdit} transparent animationType="fade" onRequestClose={() => setBudgetEdit(null)}>
+        <KeyboardAvoidingView style={styles.modalBackdrop} behavior="padding">
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBudgetEdit(null)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit budget</Text>
+            <Text style={styles.modalSub}>The most you're willing to pay for this visit.</Text>
+            <View style={styles.modalField}>
+              <Text style={styles.modalCurrency}>{currency.symbol.trim()}</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={budgetEdit?.value ?? ""}
+                onChangeText={(t) => setBudgetEdit((b) => (b ? { ...b, value: t.replace(/[^0-9]/g, "").slice(0, 6) } : b))}
+                keyboardType="number-pad"
+                autoFocus
+                selectTextOnFocus
+                returnKeyType="done"
+                onSubmitEditing={saveBudget}
+              />
+            </View>
+            <View style={styles.row}>
+              <Button title="Cancel" variant="ghost" onPress={() => setBudgetEdit(null)} style={styles.flexButton} />
+              <Button title="Save" onPress={saveBudget} style={styles.flexButton} />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Screen>
   );
 }
@@ -366,4 +452,52 @@ const createStyles = (colors: ThemeColors) =>
     row: { flexDirection: "row", gap: spacing.md },
     flexButton: { flex: 1 },
     errorFooter: { gap: spacing.sm },
+
+    failedContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 80,
+      padding: spacing.xl,
+      backgroundColor: colors.surface,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.md,
+    },
+    failedIcon: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.dangerMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(11, 27, 43, 0.5)",
+      justifyContent: "center",
+      padding: spacing.lg,
+    },
+    modalCard: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.xl,
+      padding: spacing.lg,
+      ...shadows.lg,
+    },
+    modalTitle: { ...type.title, color: colors.text },
+    modalSub: { fontSize: 14, color: colors.textMuted, marginTop: 4, marginBottom: spacing.lg },
+    modalField: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      height: 60,
+      marginBottom: spacing.lg,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+    },
+    modalCurrency: { fontSize: 24, fontWeight: "700", color: colors.textMuted, marginRight: spacing.xs },
+    modalInput: { flex: 1, fontSize: 24, fontWeight: "800", color: colors.text, paddingVertical: 0 },
   });
