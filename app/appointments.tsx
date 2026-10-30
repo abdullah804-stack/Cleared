@@ -1,6 +1,6 @@
 // app/appointments.tsx
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, ScrollView, Pressable, Alert, ActivityIndicator, Linking } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import * as Calendar from "expo-calendar";
 import * as Haptics from "expo-haptics";
@@ -47,7 +47,7 @@ export default function AppointmentsScreen() {
         onPress: async () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           await supabase.from("appointments").delete().eq("id", id);
-          fetchAppointments(); // Refresh list
+          fetchAppointments();
         }
       }
     ]);
@@ -113,7 +113,7 @@ export default function AppointmentsScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll}>
-                <Text style={styles.sectionTitle}>Upcoming Visits</Text>
+        <Text style={styles.sectionTitle}>Upcoming Visits</Text>
         {upcoming.length === 0 ? (
           <View style={styles.recallBanner}>
             <View style={styles.recallHeader}>
@@ -128,7 +128,7 @@ export default function AppointmentsScreen() {
               onPress={() => router.push({ pathname: "/plan", params: { request: "I need to book a routine 6-month dental checkup and cleaning." } })}
             >
               <Text style={styles.recallBtnText}>Book Checkup</Text>
-              <Ionicons name="arrow-forward" size={16} color={colors.accent} />
+              <Ionicons name="arrow-forward" size={16} color="#B45309" />
             </Pressable>
           </View>
         ) : (
@@ -159,11 +159,12 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: spacing.md, marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   actionText: { fontSize: 14, fontWeight: "600", color: colors.text },
-});
 
+  // Fixed the syntax error by putting these inside the StyleSheet block
   recallBanner: { backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FDE68A", borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.md },
   recallHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   recallTitle: { fontSize: 16, fontWeight: "700", color: "#B45309" },
   recallText: { fontSize: 14, color: "#92400E", lineHeight: 20, marginBottom: spacing.md },
   recallBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "#FEF3C7", alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 16, borderRadius: radius.full, gap: 4 },
   recallBtnText: { fontSize: 14, fontWeight: "700", color: "#B45309" },
+});
