@@ -48,13 +48,14 @@ export default function PlanScreen() {
   const [stepByStep, setStepByStep] = useState(false);
   const [budgetEdit, setBudgetEdit] = useState<{ id: string; value: string } | null>(null);
 
-  const { state, plan, approve, reject, skip, retry, resume, abort, executeCurrent, removeStep, editStep } = useAgent({
+  const agent = useAgent({
     planEndpoint: PLAN_ENDPOINT,
     anonKey: SUPABASE_ANON_KEY,
     userId,
     userEmail: user?.email,
     onAudit: async (entry: any) => await writeAudit(userId, entry.type, entry.description, entry.detail),
-  });
+  }) as any;
+  const { state, plan, approve, reject, skip, retry, resume, abort, executeCurrent, removeStep, editStep } = agent;
 
   // Start planning ONCE per visit. (Before, cancelling reset the state to IDLE and this effect
   // immediately started a brand-new plan, so "Cancel" never actually cancelled.)
@@ -93,7 +94,7 @@ export default function PlanScreen() {
 
   const failureReason = (stepId: string): string | null => {
     if (!("results" in state)) return null;
-    const r = state.results.find((x) => x.stepId === stepId);
+    const r = state.results.find((x: any) => x.stepId === stepId);
     if (!r || r.status !== "failure" || !r.error) return null;
     // Supabase says this when the table from supabase/appointments.sql was never created.
     if (/appointments|schema cache|does not exist|relation/i.test(r.error)) {
@@ -264,7 +265,7 @@ export default function PlanScreen() {
             )}
 
             <View style={styles.stepsList}>
-              {state.plan.map((step, i) => renderStep(step, i))}
+              {state.plan.map((step: any, i: number) => renderStep(step, i))}
             </View>
           </View>
         )}

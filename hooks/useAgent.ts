@@ -311,14 +311,11 @@ export function useAgent(opts: UseAgentOptions) {
         if (step.tool === "generate_care_plan") {
           await AsyncStorage.setItem("current_care_plan", result.output);
         }
- // ADD THIS BLOCK:
-      if (step.tool === "book_appointment") {
-        const parsed = JSON.parse(result.output);
-        if (parsed.clinic_phone) await AsyncStorage.setItem("clinic_phone", parsed.clinic_phone);
-        if (parsed.clinic_name) await AsyncStorage.setItem("clinic_name", parsed.clinic_name);
-      }
-      dispatch({ type: "STEP_SUCCESS", result: { stepId: step.id, status: "success", output: result.output, durationMs: 1000 } });
-    }
+        if (step.tool === "book_appointment") {
+          const parsed = JSON.parse(result.output);
+          if (parsed.clinic_phone) await AsyncStorage.setItem("clinic_phone", parsed.clinic_phone);
+          if (parsed.clinic_name) await AsyncStorage.setItem("clinic_name", parsed.clinic_name);
+        }
         // The appointment screen reads this; without it it always showed "tomorrow 10:00".
         if (step.tool === "book_appointment") {
           await AsyncStorage.setItem("current_booking", result.output);
