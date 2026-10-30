@@ -1,5 +1,9 @@
 // app/_layout.tsx
 import { ReactNode, useEffect, useState } from "react";
+import { initRoutineDb } from "../shared/routine";
+import { initRecoveryDb } from "../shared/recovery";
+
+
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
@@ -83,11 +87,16 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="plan" options={{ title: "Plan" }} />
       <Stack.Screen name="audit" options={{ title: "Audit Log" }} />
-      <Stack.Screen name="appointment" options={{ title: "Appointment", headerBackVisible: false }} />
+            <Stack.Screen name="appointments" options={{ title: "My Appointments" }} />
       <Stack.Screen name="emergency" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ title: "Settings" }} />
+      <Stack.Screen name="routine" options={{ title: "Daily Routine" }} />
+      <Stack.Screen name="recovery" options={{ title: "Recovery Plan" }} />
+      <Stack.Screen name="chat" options={{ title: "Ask Cleared" }} />
+      <Stack.Screen name="photos" options={{ title: "Photo Timeline" }} />
       <Stack.Screen name="journal" options={{ title: "Pain Journal" }} />
       <Stack.Screen name="estimator" options={{ title: "Cost Estimator" }} />
+            <Stack.Screen name="dental-profile" options={{ title: "Dental Profile" }} />
     </Stack>
   );
 }
@@ -96,6 +105,10 @@ export default function RootLayout() {
   useEffect(() => {
     initAuditDb().catch(console.error);
     initJournalDb().catch(console.error);
+    initRoutineDb().catch(console.error); // <-- ADD THIS LINE
+    initRecoveryDb().catch(console.error); // <-- ADD THIS
+
+
   }, []);
 
   return (

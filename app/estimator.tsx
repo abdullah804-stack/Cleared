@@ -1,183 +1,100 @@
 // app/estimator.tsx
-import { useMemo, useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TextInput, KeyboardAvoidingView, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
+import { StyleSheet, Text, View, ScrollView, Pressable, TextInput } from "react-native";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
-import { useThemeColors, ThemeColors, radius, spacing, shadows, type } from "../constants/theme";
-import { CURRENCIES, CurrencyCode, formatMoney, getDefaultCurrency } from "../constants/pricing";
+import { Button } from "../components/Button";
+import { colors, radius, spacing } from "../constants/theme";
+import { Ionicons } from "@expo/vector-icons";
 
-// Rough typical out-of-pocket prices. These are PLACEHOLDERS: adjust the PKR column to what
-// clinics in your area actually charge before you launch.
-const PROCEDURES: { id: string; name: string; category: string; prices: Record<CurrencyCode, number> }[] = [
-  { id: "1", name: "Routine Cleaning", category: "Preventative", prices: { USD: 80, PKR: 3500 } },
-  { id: "2", name: "Dental Checkup & X-Ray", category: "Preventative", prices: { USD: 100, PKR: 2500 } },
-  { id: "3", name: "Composite Filling", category: "Restorative", prices: { USD: 150, PKR: 4500 } },
-  { id: "4", name: "Root Canal (Molar)", category: "Surgical", prices: { USD: 800, PKR: 20000 } },
-  { id: "5", name: "Simple Extraction", category: "Surgical", prices: { USD: 200, PKR: 3000 } },
-  { id: "6", name: "Teeth Whitening", category: "Cosmetic", prices: { USD: 300, PKR: 20000 } },
-  { id: "7", name: "Porcelain Crown", category: "Restorative", prices: { USD: 900, PKR: 15000 } },
+// Realistic PKR Ranges (Approximate 2024 Pakistani Market Rates)
+const PROCEDURES = [
+  { id: "1", name: "Scaling & Polishing", min: 3000, max: 6000, category: "Preventative" },
+  { id: "2", name: "Dental Checkup & X-Ray", min: 1000, max: 2500, category: "Preventative" },
+  { id: "3", name: "Composite Filling", min: 4000, max: 8000, category: "Restorative" },
+  { id: "4", name: "Root Canal (RCT)", min: 15000, max: 30000, category: "Surgical" },
+  { id: "5", name: "Tooth Extraction", min: 3000, max: 8000, category: "Surgical" },
+  { id: "6", name: "Teeth Whitening", min: 15000, max: 40000, category: "Cosmetic" },
+  { id: "7", name: "Zirconia Crown", min: 20000, max: 45000, category: "Restorative" },
+  { id: "8", name: "Braces (Orthodontics)", min: 80000, max: 250000, category: "Cosmetic" },
 ];
 
 export default function EstimatorScreen() {
-  const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(getDefaultCurrency().code);
-  const currency = CURRENCIES[currencyCode];
-
+  const router = useRouter();
   const [budget, setBudget] = useState("");
-  const [focused, setFocused] = useState(false);
 
-  const hasBudget = budget.length > 0;
-  const maxBudget = hasBudget ? Number(budget) : Infinity;
-  const withinCount = PROCEDURES.filter((p) => p.prices[currencyCode] <= maxBudget).length;
-
-  const switchCurrency = (code: CurrencyCode) => {
-    if (code === currencyCode) return;
-    setCurrencyCode(code);
-    setBudget(""); // an amount typed in one currency means something else in the other
-  };
+  const maxBudget = Number(budget) || Infinity;
 
   return (
     <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.header}>
-            <Text style={styles.title}>Cost Estimator</Text>
-            <Text style={styles.subtitle}>Typical out-of-pocket prices (no insurance).</Text>
-          </View>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Cost Estimator</Text>
+          <Text style={styles.subtitle}>Typical ranges in PKR (without insurance).</Text>
+        </View>
 
-          <View style={styles.segment}>
-            {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => {
-              const active = code === currencyCode;
-              return (
-                <Pressable key={code} style={[styles.segmentBtn, active && styles.segmentBtnActive]} onPress={() => switchCurrency(code)}>
-                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{code}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Max Budget (PKR)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. 20000"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="numeric"
+            value={budget}
+            onChangeText={setBudget}
+          />
+        </View>
 
-          <View style={[styles.inputContainer, focused && styles.inputFocused]}>
-            <Text style={styles.inputLabel}>Max budget</Text>
-            <View style={styles.inputRow}>
-              <Text style={styles.currency}>{currency.symbol.trim()}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={currencyCode === "PKR" ? "e.g. 5000" : "e.g. 200"}
-                placeholderTextColor={colors.textMuted}
-                keyboardType="number-pad"
-                value={budget}
-                onChangeText={(t) => setBudget(t.replace(/[^0-9]/g, "").slice(0, 7))}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                returnKeyType="done"
-              />
-            </View>
-            {hasBudget && (
-              <Text style={styles.summary}>
-                {withinCount} of {PROCEDURES.length} procedures fit your budget
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.list}>
-            {PROCEDURES.map((proc) => {
-              const price = proc.prices[currencyCode];
-              const isWithinBudget = price <= maxBudget;
-              return (
-                <View key={proc.id} style={[styles.card, hasBudget && !isWithinBudget && { opacity: 0.6 }]}>
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.cardName}>{proc.name}</Text>
-                    <Text style={styles.cardCategory}>{proc.category}</Text>
-                  </View>
-                  <View style={styles.cardPriceContainer}>
-                    <Text style={styles.cardPrice}>{formatMoney(price, currency)}</Text>
-                    {hasBudget ? (
-                      <View style={[styles.badge, { backgroundColor: isWithinBudget ? colors.successMuted : colors.dangerMuted }]}>
-                        <Ionicons
-                          name={isWithinBudget ? "checkmark-circle" : "close-circle"}
-                          size={12}
-                          color={isWithinBudget ? colors.success : colors.danger}
-                        />
-                        <Text style={[styles.badgeText, { color: isWithinBudget ? colors.success : colors.danger }]}>
-                          {isWithinBudget ? "In budget" : "Over budget"}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
+        <View style={styles.list}>
+          {PROCEDURES.map((proc) => {
+            const isWithinBudget = proc.min <= maxBudget;
+            return (
+              <View key={proc.id} style={styles.card}>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardName}>{proc.name}</Text>
+                  <Text style={styles.cardCategory}>{proc.category}</Text>
                 </View>
-              );
-            })}
-          </View>
-
-          <Text style={styles.disclaimer}>Estimates only. Actual prices vary by clinic and city.</Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+                <View style={styles.cardPriceContainer}>
+                  <Text style={styles.cardPrice}>Rs {proc.min.toLocaleString()} - {proc.max.toLocaleString()}</Text>
+                  {budget ? (
+                    <View style={[styles.badge, { backgroundColor: isWithinBudget ? "#F0FDF4" : "#FEF2F2" }]}>
+                      <Text style={[styles.badgeText, { color: isWithinBudget ? "#166534" : "#991B1B" }]}>
+                        {isWithinBudget ? "Within Budget" : "Over Budget"}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+      <View style={styles.footer}>
+        <Button title="Back to Home" variant="ghost" onPress={() => router.back()} />
+      </View>
     </Screen>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    scroll: { flexGrow: 1, paddingBottom: spacing.xxl },
-    header: { marginTop: spacing.sm, marginBottom: spacing.lg },
-    title: { ...type.display, color: colors.text },
-    subtitle: { fontSize: 15, color: colors.textMuted, marginTop: spacing.xs },
-
-    segment: {
-      flexDirection: "row",
-      alignSelf: "flex-start",
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: radius.full,
-      padding: 4,
-      marginBottom: spacing.md,
-    },
-    segmentBtn: { paddingHorizontal: spacing.lg, paddingVertical: 8, borderRadius: radius.full },
-    segmentBtnActive: { backgroundColor: colors.surface, ...shadows.sm },
-    segmentText: { fontSize: 13, fontWeight: "700", color: colors.textMuted },
-    segmentTextActive: { color: colors.accentStrong },
-
-    inputContainer: {
-      backgroundColor: colors.surface,
-      padding: spacing.md,
-      borderRadius: radius.xl,
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      marginBottom: spacing.lg,
-      ...shadows.sm,
-    },
-    inputFocused: { borderColor: colors.accent },
-    inputLabel: { ...type.overline, color: colors.textMuted, marginBottom: spacing.xs },
-    inputRow: { flexDirection: "row", alignItems: "center" },
-    currency: { fontSize: 24, fontWeight: "700", color: colors.textMuted, marginRight: spacing.sm },
-    input: { flex: 1, fontSize: 26, fontWeight: "800", color: colors.text, paddingVertical: spacing.xs },
-    summary: { fontSize: 13, fontWeight: "600", color: colors.accentStrong, marginTop: spacing.xs },
-
-    list: { gap: spacing.sm + 2 },
-    card: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      backgroundColor: colors.surface,
-      padding: spacing.md,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      ...shadows.sm,
-    },
-    cardInfo: { flex: 1, paddingRight: spacing.sm },
-    cardName: { fontSize: 16, fontWeight: "600", color: colors.text, marginBottom: 3, letterSpacing: -0.2 },
-    cardCategory: { ...type.overline, fontSize: 10, color: colors.textMuted },
-    cardPriceContainer: { alignItems: "flex-end" },
-    cardPrice: { fontSize: 19, fontWeight: "800", color: colors.text, marginBottom: 4, letterSpacing: -0.3 },
-    badge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
-    badgeText: { fontSize: 11, fontWeight: "700" },
-
-    disclaimer: { ...type.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.lg },
-  });
+const styles = StyleSheet.create({
+  scroll: { flexGrow: 1, paddingBottom: 120 },
+  header: { marginTop: spacing.md, marginBottom: spacing.xl },
+  title: { fontSize: 28, fontWeight: "800", color: colors.text },
+  subtitle: { fontSize: 15, color: colors.textMuted, marginTop: spacing.xs },
+  
+  inputContainer: { backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xl },
+  inputLabel: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginBottom: spacing.xs },
+  input: { fontSize: 20, fontWeight: "700", color: colors.text, paddingVertical: spacing.xs },
+  
+  list: { gap: spacing.sm },
+  card: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  cardInfo: { flex: 1 },
+  cardName: { fontSize: 16, fontWeight: "600", color: colors.text, marginBottom: 2 },
+  cardCategory: { fontSize: 12, color: colors.textMuted, textTransform: "uppercase", fontWeight: "600" },
+  cardPriceContainer: { alignItems: "flex-end", maxWidth: "50%" },
+  cardPrice: { fontSize: 14, fontWeight: "800", color: colors.text, marginBottom: 4, textAlign: "right" },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.full },
+  badgeText: { fontSize: 11, fontWeight: "700" },
+  footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.md, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+});

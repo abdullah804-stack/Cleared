@@ -18,5 +18,6 @@ export const PlanStepSchema = z.object({
 });
 
 export const PlanSchema = z.object({
-  steps: z.array(PlanStepSchema).min(1),
+  // Upper bound stops a runaway AI reply from producing a huge plan the user can't review.
+  steps: z.array(PlanStepSchema).min(1).max(10),
 });

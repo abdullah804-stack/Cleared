@@ -108,34 +108,49 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInUp.delay(400).duration(600).springify()}>
-            <Text style={styles.sectionTitle}>Your Health</Text>
-            <View style={styles.actionRow}>
-              <Pressable
-                style={({ pressed }) => [styles.actionCard, pressed && styles.cardPressed]}
-                onPress={() => router.push("/journal")}
-              >
-                <View style={styles.actionIcon}>
-                  <Ionicons name="analytics" size={20} color={colors.accentStrong} />
-                </View>
-                <View style={styles.actionFooter}>
-                  <Text style={styles.actionText}>Pain Journal</Text>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </View>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.actionCard, pressed && styles.cardPressed]}
-                onPress={() => router.push("/estimator")}
-              >
-                <View style={styles.actionIcon}>
-                  <Ionicons name="calculator" size={20} color={colors.accentStrong} />
-                </View>
-                <View style={styles.actionFooter}>
-                  <Text style={styles.actionText}>Cost Estimator</Text>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </View>
-              </Pressable>
-            </View>
+                    {/* Replace the Quick Triage section with this: */}
+          <Animated.View entering={FadeInUp.delay(300).duration(600).springify()}>
+            <Pressable style={styles.chatBanner} onPress={() => router.push("/chat")}>
+              <View style={styles.chatIconBox}>
+                <Ionicons name="chatbubbles" size={24} color="#FFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.chatTitle}>Ask Cleared</Text>
+                <Text style={styles.chatSubtitle}>Get instant answers about your dental health</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </Pressable>
+          </Animated.View>
+            // Update the section:
+                    <Text style={styles.sectionTitle}>Your Health</Text>
+          <View style={styles.actionRow}>
+            <Pressable style={styles.actionCard} onPress={() => router.push("/photos")}>
+              <Ionicons name="images" size={24} color={colors.accent} />
+              <Text style={styles.actionText}>Photos</Text>
+            </Pressable>
+            <Pressable style={styles.actionCard} onPress={() => router.push("/routine")}>
+              <Ionicons name="flame" size={24} color="#F59E0B" />
+              <Text style={styles.actionText}>Daily Routine</Text>
+            </Pressable>
+            <Pressable style={styles.actionCard} onPress={() => router.push("/appointments")}>
+              <Ionicons name="calendar" size={24} color={colors.accent} />
+              <Text style={styles.actionText}>My Visits</Text>
+            </Pressable>
+            <Pressable style={styles.actionCard} onPress={() => router.push("/journal")}>
+              <Ionicons name="analytics" size={24} color={colors.accent} />
+              <Text style={styles.actionText}>Pain Journal</Text>
+            </Pressable>
+          
+            </Pressable>
+            <Pressable style={styles.actionCard} onPress={() => router.push("/estimator")}>
+              <Ionicons name="calculator" size={24} color={colors.accent} />
+              <Text style={styles.actionText}>Cost Estimator</Text>
+            </Pressable>
+            <Pressable style={styles.actionCard} onPress={() => router.push("/dental-profile")}>
+              <Ionicons name="person-circle-outline" size={24} color={colors.accent} />
+              <Text style={styles.actionText}>Dental Profile</Text>
+            </Pressable>
+          </View>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -273,3 +288,11 @@ const createStyles = (colors: ThemeColors) =>
     actionFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     actionText: { ...type.bodyStrong, fontSize: 14, color: colors.text },
   });
+
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  actionCard: { width: "47%", backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2, gap: spacing.sm },
+
+  chatBanner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 },
+  chatIconBox: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
+  chatTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  chatSubtitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },

@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PlanStep, StepResult } from "../shared/types";
 import { executeTool } from "../shared/tools";
 import { PlanSchema } from "../shared/schema";
+import { getDefaultCurrency } from "../constants/pricing";
 
 export type AgentState =
   | { status: "IDLE" }
@@ -184,10 +185,10 @@ export function useAgent(opts: UseAgentOptions) {
   const plan = useCallback(
     async (input: string) => {
       dispatch({ type: "PLAN_START", input });
-      audit("PLAN_REQUESTED", "Asked for a care plan", { input });
+      audit("request.received", "Asked for a care plan", { input });
 
       if (isEmergency(input)) {
-        audit("EMERGENCY_DETECTED", "Emergency keywords found, sent to urgent-care screen");
+        audit("emergency.detected", "Emergency keywords found, sent to urgent-care screen");
         dispatch({ type: "PLAN_FAILED", reason: "Emergency detected." });
         router.replace("/emergency"); // replace, so "Go back" returns home instead of a dead plan screen
         return;
@@ -200,7 +201,7 @@ export function useAgent(opts: UseAgentOptions) {
           const res = await fetch(optsRef.current.planEndpoint, {
             method: "POST",
             headers: { Authorization: `Bearer ${optsRef.current.anonKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ input }),
+            body: JSON.stringify({ input, currency: getDefaultCurrency().code }),
             signal: controller.signal,
           });
           if (!res.ok) throw new Error(`Server error (${res.status})`);
@@ -220,11 +221,23 @@ export function useAgent(opts: UseAgentOptions) {
         if (firstBrace === -1 || lastBrace === -1) throw new Error("The AI didn't return a plan.");
 
         const parsed = PlanSchema.parse(JSON.parse(content.substring(firstBrace, lastBrace + 1)));
-        audit("PLAN_GENERATED", `AI proposed ${parsed.steps.length} steps`, { tools: parsed.steps.map((s: PlanStep) => s.tool) });
+
+        // The AI thinks in dollars ("budget 150"). On a PKR phone that would read "Rs 150",
+        // so convert dollar-sized budgets to a rough rupee amount (rounded to the nearest 500).
+        // (Skipped when the updated plan function already answered in rupees.)
+        if (getDefaultCurrency().code === "PKR" && body.currency_applied !== "PKR") {
+          for (const s of parsed.steps as PlanStep[]) {
+            const p = Number((s.args as any)?.max_price);
+            if (Number.isFinite(p) && p > 0 && p < 2000) {
+              (s.args as any).max_price = Math.max(500, Math.round((p * 280) / 500) * 500);
+            }
+          }
+        }
+        audit("plan.created", `AI proposed ${parsed.steps.length} steps`, { tools: parsed.steps.map((s: PlanStep) => s.tool) });
         dispatch({ type: "PLAN_SUCCESS", plan: parsed.steps });
       } catch (err: any) {
         const reason = friendlyError(err);
-        audit("PLAN_FAILED", `Plan failed: ${reason}`);
+        audit("plan.failed", `Plan failed: ${reason}`);
         dispatch({ type: "PLAN_FAILED", reason });
       }
     },
@@ -233,7 +246,7 @@ export function useAgent(opts: UseAgentOptions) {
 
   const removeStep = useCallback(
     (stepId: string) => {
-      audit("PLAN_EDITED", "Removed a step from the plan", { stepId });
+      audit("plan.edited", "Removed a step from the plan", { stepId });
       dispatch({ type: "REMOVE_STEP", stepId });
     },
     [audit]
@@ -241,7 +254,7 @@ export function useAgent(opts: UseAgentOptions) {
 
   const editStep = useCallback(
     (stepId: string, newArgs: Record<string, any>) => {
-      audit("PLAN_EDITED", "Edited a step", { stepId, newArgs });
+      audit("plan.edited", "Edited a step", { stepId, newArgs });
       dispatch({ type: "EDIT_STEP", stepId, newArgs });
     },
     [audit]
@@ -251,7 +264,7 @@ export function useAgent(opts: UseAgentOptions) {
     (stepByStep: boolean) => {
       const s = stateRef.current;
       if (s.status === "AWAITING_APPROVAL") {
-        audit("PLAN_APPROVED", `Approved ${s.plan.length} steps`, { stepByStep, tools: s.plan.map((p) => p.tool) });
+        audit("user.approved", `Approved ${s.plan.length} steps`, { stepByStep, tools: s.plan.map((p) => p.tool) });
       }
       dispatch({ type: "APPROVE", stepByStep });
     },
@@ -259,17 +272,17 @@ export function useAgent(opts: UseAgentOptions) {
   );
 
   const reject = useCallback(() => {
-    audit("PLAN_REJECTED", "Cancelled the plan");
+    audit("user.rejected", "Cancelled the plan");
     dispatch({ type: "REJECT" });
   }, [audit]);
 
   const skip = useCallback(() => {
-    audit("STEP_SKIPPED", "Skipped a failed step");
+    audit("user.skipped", "Skipped a failed step");
     dispatch({ type: "SKIP_STEP" });
   }, [audit]);
 
   const retry = useCallback(() => {
-    audit("STEP_RETRIED", "Retried a failed step");
+    audit("user.retried", "Retried a failed step");
     dispatch({ type: "RETRY_STEP" });
   }, [audit]);
 
@@ -283,7 +296,7 @@ export function useAgent(opts: UseAgentOptions) {
 
     const step = s.plan[s.currentIndex];
     if (!step) {
-      audit("RUN_COMPLETED", "All steps finished", { steps: s.plan.length });
+      audit("run.completed", "All steps finished", { steps: s.plan.length });
       dispatch({ type: "COMPLETE", endedAt: Date.now() });
       return;
     }
@@ -298,16 +311,28 @@ export function useAgent(opts: UseAgentOptions) {
         if (step.tool === "generate_care_plan") {
           await AsyncStorage.setItem("current_care_plan", result.output);
         }
-        audit("STEP_SUCCEEDED", step.description, { tool: step.tool, durationMs });
+ // ADD THIS BLOCK:
+      if (step.tool === "book_appointment") {
+        const parsed = JSON.parse(result.output);
+        if (parsed.clinic_phone) await AsyncStorage.setItem("clinic_phone", parsed.clinic_phone);
+        if (parsed.clinic_name) await AsyncStorage.setItem("clinic_name", parsed.clinic_name);
+      }
+      dispatch({ type: "STEP_SUCCESS", result: { stepId: step.id, status: "success", output: result.output, durationMs: 1000 } });
+    }
+        // The appointment screen reads this; without it it always showed "tomorrow 10:00".
+        if (step.tool === "book_appointment") {
+          await AsyncStorage.setItem("current_booking", result.output);
+        }
+        audit("tool.completed", step.description, { tool: step.tool, durationMs });
         dispatch({ type: "STEP_SUCCESS", result: { stepId: step.id, status: "success", output: result.output, durationMs } });
       } else {
-        audit("STEP_FAILED", `${step.description}: ${result.error}`, { tool: step.tool, durationMs });
+        audit("tool.failed", `${step.description}: ${result.error}`, { tool: step.tool, durationMs });
         dispatch({ type: "STEP_FAILURE", result: { stepId: step.id, status: "failure", error: result.error, durationMs }, reason: result.error });
       }
     } catch (e: any) {
       // A tool that throws used to leave the screen stuck on "Running..." forever.
       const reason = e?.message || "Unexpected error";
-      audit("STEP_FAILED", `${step.description}: ${reason}`, { tool: step.tool });
+      audit("tool.failed", `${step.description}: ${reason}`, { tool: step.tool });
       dispatch({ type: "STEP_FAILURE", result: { stepId: step.id, status: "failure", error: reason, durationMs: Date.now() - started }, reason });
     } finally {
       runningRef.current = false;

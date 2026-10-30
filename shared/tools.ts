@@ -10,11 +10,11 @@ const SLOTS = [
   { slot_id: "slot-2", time: "2:00 PM" },
 ];
 
-// The fallback data in case GPS fails or you are in an area with no dentists
+// Fallback with real-looking PK numbers (for demo)
 const FALLBACK_CLINICS = [
-  { id: "c1", name: "Bright Smile Dental", price: 80, phone: "555-0101", address: "123 Main St" },
-  { id: "c2", name: "City Dental Care", price: 95, phone: "555-0102", address: "456 Oak Ave" },
-  { id: "c3", name: "Gentle Touch Dentistry", price: 70, phone: "555-0103", address: "789 Pine Rd" },
+  { id: "c1", name: "Smile Care Dental", price: 80, phone: "+923001234567", address: "Main Boulevard" },
+  { id: "c2", name: "City Dental Clinic", price: 95, phone: "+923017654321", address: "Gulberg III" },
+  { id: "c3", name: "Gentle Touch Dentistry", price: 70, phone: "+923219876543", address: "DHA Phase 5" },
 ];
 
 async function scheduleLocalAlerts(appointmentTime: Date) {
@@ -25,15 +25,51 @@ async function scheduleLocalAlerts(appointmentTime: Date) {
   });
 
   const now = Date.now();
-  const trigger24h = new Date(appointmentTime); trigger24h.setHours(trigger24h.getHours() - 24);
-  if (trigger24h.getTime() > now) await Notifications.scheduleNotificationAsync({ content: { title: "Appointment Tomorrow", body: "Your dental appointment is tomorrow." }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger24h } });
-
-  const trigger2h = new Date(appointmentTime); trigger2h.setHours(trigger2h.getHours() - 2);
-  if (trigger2h.getTime() > now) await Notifications.scheduleNotificationAsync({ content: { title: "Appointment in 2 Hours", body: "Time to head to Bright Smile Dental soon." }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger2h } });
   
+  // 24h Before
+  const trigger24h = new Date(appointmentTime); trigger24h.setHours(trigger24h.getHours() - 24);
+  if (trigger24h.getTime() > now) {
+    await Notifications.scheduleNotificationAsync({ 
+      content: { title: "Appointment Tomorrow", body: "Your dental appointment is tomorrow." }, 
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger24h } 
+    });
+  }
+
+  // 2h Before
+  const trigger2h = new Date(appointmentTime); trigger2h.setHours(trigger2h.getHours() - 2);
+  if (trigger2h.getTime() > now) {
+    await Notifications.scheduleNotificationAsync({ 
+      content: { title: "Appointment in 2 Hours", body: "Time to head to your dental clinic soon." }, 
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger2h } 
+    });
+  }
+  
+  // 1h Before
   const trigger1h = new Date(appointmentTime); trigger1h.setHours(trigger1h.getHours() - 1);
-  if (trigger1h.getTime() > now) await Notifications.scheduleNotificationAsync({ content: { title: "Dental Appointment Reminder", body: "Your appointment is in 1 hour!" }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger1h } });
+  if (trigger1h.getTime() > now) {
+    await Notifications.scheduleNotificationAsync({ 
+      content: { title: "Dental Appointment Reminder", body: "Your appointment is in 1 hour!" }, 
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger1h } 
+    });
+  }
+
+  // NEW: 6-Month Recall (180 Days Later)
+  const sixMonthsLater = new Date(appointmentTime);
+  sixMonthsLater.setDate(sixMonthsLater.getDate() + 180);
+  sixMonthsLater.setHours(10, 0, 0, 0); // 10 AM on that day
+
+  if (sixMonthsLater.getTime() > now) {
+    await Notifications.scheduleNotificationAsync({ 
+      content: { 
+        title: "Time for your 6-month checkup! 🦷", 
+        body: "It's been 6 months since your last visit. Open Cleared to book your next cleaning and keep your smile healthy." 
+      }, 
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: sixMonthsLater } 
+    });
+  }
 }
+// Global variable to hold the selected clinic for the booking step
+let selectedClinicDetails: any = null;
 
 export async function executeTool(
   tool: string,
@@ -51,14 +87,13 @@ export async function executeTool(
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status !== "granted") {
-            // If no permission, return fallback
+            selectedClinicDetails = FALLBACK_CLINICS[0];
             return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
           }
           
           const loc = await Location.getCurrentPositionAsync({});
-          
-          // If GPS returns 0,0 (ocean), return fallback
           if (loc.coords.latitude === 0 && loc.coords.longitude === 0) {
+            selectedClinicDetails = FALLBACK_CLINICS[0];
             return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
           }
 
@@ -66,20 +101,25 @@ export async function executeTool(
           const response = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", body: query });
           const data = await response.json();
           
-          // If API finds nothing, return fallback
           if (!data.elements || data.elements.length === 0) {
+            selectedClinicDetails = FALLBACK_CLINICS[0];
             return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
           }
 
           const clinics = data.elements.map((el: any, i: number) => ({
-            id: `osm-${el.id}`, name: el.tags.name || "Local Dental Clinic", price: 70 + (i * 15),
-            phone: el.tags.phone || "555-123-4567", address: el.tags["addr:street"] || "Address on file",
+            id: `osm-${el.id}`, 
+            name: el.tags.name || "Local Dental Clinic", 
+            price: 70 + (i * 15),
+            phone: el.tags.phone || "+923001234567", // Fallback PK number
+            address: el.tags["addr:street"] || "Address on file",
             lat: el.lat, lon: el.lon,
           }));
+          
+          selectedClinicDetails = clinics[0]; // Save the first clinic for booking
           return { ok: true, output: JSON.stringify(clinics) };
 
         } catch (e) {
-          // If anything crashes (no internet, timeout, etc), use fallback
+          selectedClinicDetails = FALLBACK_CLINICS[0];
           return { ok: true, output: JSON.stringify(FALLBACK_CLINICS) };
         }
       }
@@ -102,26 +142,29 @@ export async function executeTool(
 
         if (userId) {
           await supabase.from("appointments").insert({
-            user_id: userId, user_email: userEmail || "demo@cleared.app",
-            clinic_name: "Bright Smile Dental", appointment_time: tomorrow.toISOString(),
+            user_id: userId, 
+            user_email: userEmail || "demo@cleared.app",
+            clinic_name: selectedClinicDetails?.name || "Dental Clinic", 
+            appointment_time: tomorrow.toISOString(),
           });
           await scheduleLocalAlerts(tomorrow);
         }
 
-        return { ok: true, output: JSON.stringify({ confirmation_id: "conf-xyz", appointment_time: tomorrow.toISOString() }) };
+        return { ok: true, output: JSON.stringify({ 
+          confirmation_id: "conf-xyz", 
+          appointment_time: tomorrow.toISOString(),
+          clinic_phone: selectedClinicDetails?.phone || "+923001234567",
+          clinic_name: selectedClinicDetails?.name || "Dental Clinic"
+        }) };
       }
 
       case "generate_care_plan":
         await delay(600);
-        return { 
-          ok: true, 
-          output: JSON.stringify([
-            "Avoid very cold or hot foods until evaluated.",
-            "Use desensitizing toothpaste and avoid hard chewing.",
-            "Rinse gently with warm salt water twice a day.",
-            "Take over-the-counter pain relief if needed."
-          ]) 
-        };
+        return { ok: true, output: JSON.stringify([
+          "Avoid very cold or hot foods until evaluated.",
+          "Use desensitizing toothpaste and avoid hard chewing.",
+          "Rinse gently with warm salt water twice a day."
+        ])};
 
       case "schedule_reminder":
         await delay(400);

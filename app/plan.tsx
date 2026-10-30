@@ -91,6 +91,17 @@ export default function PlanScreen() {
     setBudgetEdit(null);
   };
 
+  const failureReason = (stepId: string): string | null => {
+    if (!("results" in state)) return null;
+    const r = state.results.find((x) => x.stepId === stepId);
+    if (!r || r.status !== "failure" || !r.error) return null;
+    // Supabase says this when the table from supabase/appointments.sql was never created.
+    if (/appointments|schema cache|does not exist|relation/i.test(r.error)) {
+      return `${r.error}\nFix: run supabase/appointments.sql in the Supabase SQL editor, then tap Retry Step.`;
+    }
+    return r.error;
+  };
+
   const renderStep = (step: any, index: number) => {
     let statusColor = colors.border;
     let statusText = "Pending";
@@ -120,7 +131,11 @@ export default function PlanScreen() {
       >
         <View style={styles.stepHeader}>
           <View style={[styles.iconBox, { backgroundColor: isPending ? colors.surfaceAlt : `${statusColor}1F` }]}>
-            <Ionicons name={TOOL_ICONS[step.tool] || "build"} size={20} color={iconColor} />
+            <Ionicons
+              name={statusText === "Failed" ? "alert-circle" : TOOL_ICONS[step.tool] || "build"}
+              size={20}
+              color={iconColor}
+            />
           </View>
           <View style={styles.stepTextContainer}>
             <View style={[styles.statusPill, { backgroundColor: isPending ? colors.surfaceAlt : `${statusColor}1F` }]}>
@@ -128,6 +143,13 @@ export default function PlanScreen() {
             </View>
             <Text style={styles.stepDescription}>{step.description}</Text>
             <Text style={styles.stepImpact}>Why: {step.estimatedImpact}</Text>
+
+            {/* Before, a failed step never said WHY it failed. */}
+            {statusText === "Failed" && failureReason(step.id) && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{failureReason(step.id)}</Text>
+              </View>
+            )}
 
             {isClinic && step.args.max_price && (
               <View style={styles.budgetBadge}>
@@ -222,7 +244,7 @@ export default function PlanScreen() {
                 <View style={styles.dataPanel}>
                   <Ionicons name="shield-checkmark" size={20} color={colors.accentStrong} />
                   <Text style={styles.dataPanelText}>
-                    What leaves this device: Your text prompt and approximate location will be sent to OpenRouter AI to generate this plan.
+                    What leaves this device: only the text you typed is sent to an AI service (OpenRouter) to build this plan. Your location is not sent.
                   </Text>
                 </View>
                 <View style={styles.toggleRow}>
@@ -390,6 +412,13 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: spacing.xs,
     },
     budgetText: { fontSize: 12, fontWeight: "700", color: colors.success },
+    errorBox: {
+      backgroundColor: colors.dangerMuted,
+      borderRadius: radius.sm,
+      padding: spacing.sm + 2,
+      marginTop: spacing.xs,
+    },
+    errorText: { fontSize: 12, lineHeight: 17, color: colors.danger, fontWeight: "600" },
 
     editActions: { flexDirection: "row", gap: spacing.sm, marginLeft: spacing.sm },
     actionBtn: {
