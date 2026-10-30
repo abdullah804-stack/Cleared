@@ -1,6 +1,6 @@
 // contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { createClient, Session, User } from "@supabase/supabase-js";
+import { createClient, User } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 
@@ -38,6 +38,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -91,12 +92,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile((prev) => (prev ? { ...prev, ...updates } : { ...updates } as Profile));
   };
 
+  const signInWithGoogle = async () => {
+    const redirectUrl = "cleared://";
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
+    });
+    if (error) throw error;
+    const res = await WebBrowser.openAuthSessionAsync(data?.url ?? "", redirectUrl);
+    if (res.type === "success") {
+      const { url } = res;
+      const params = new URLSearchParams(url.split("#")[1]);
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      }
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, updateProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, updateProfile, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );
