@@ -53,6 +53,8 @@ function RootLayoutNav() {
       <Stack.Screen name="appointments" options={{ title: "My Appointments" }} />
       <Stack.Screen name="recovery" options={{ title: "Recovery Plan" }} />
       <Stack.Screen name="dental-profile" options={{ title: "Dental Profile" }} />
+      <Stack.Screen name="case-card" options={{ title: "Case Card" }} />
+      <Stack.Screen name="visit-notes" options={{ title: "Visit Notes" }} />
       <Stack.Screen name="triage" options={{ title: "Triage" }} />
       <Stack.Screen name="emergency-aid" options={{ title: "First-Aid" }} />
       <Stack.Screen name="chat" options={{ title: "Ask Cleared" }} />

@@ -9,10 +9,8 @@ import { useThemeColors, radius, spacing } from "../constants/theme";
 import { useAuth } from "../contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
-// SAFE IMPORT for Speech Recognition
 let ExpoSpeechRecognitionModule: any = null;
 let useSpeechRecognitionEvent: any = () => {};
-
 try {
   const SpeechRecognition = require("expo-speech-recognition");
   ExpoSpeechRecognitionModule = SpeechRecognition.ExpoSpeechRecognitionModule;
@@ -34,30 +32,32 @@ export default function HomeScreen() {
   useSpeechRecognitionEvent("start", () => setIsListening(true));
   useSpeechRecognitionEvent("end", () => setIsListening(false));
   useSpeechRecognitionEvent("result", (event: any) => setInput(event.results[0]?.transcript || ""));
-  useSpeechRecognitionEvent("error", () => setIsListening(false));
 
   const toggleListening = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!ExpoSpeechRecognitionModule) {
-      Alert.alert("Not Available", "Voice input requires the full APK build.");
-      return;
-    }
+    if (!ExpoSpeechRecognitionModule) return Alert.alert("Not Available", "Voice requires the APK build.");
     if (isListening) {
       ExpoSpeechRecognitionModule.stop();
     } else {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!result.granted) return;
-      
-      // URDU VOICE INPUT ENABLED
       ExpoSpeechRecognitionModule.start({ lang: "ur-PK", interimResults: true });
     }
   };
 
-  const handlePlan = () => {
-    if (!input.trim()) return;
-    // Navigate to the Triage screen first!
-    router.push({ pathname: "/triage", params: { request: input.trim() } });
+  const handlePlan = (customText?: string) => {
+    const text = customText || input;
+    if (!text.trim()) return;
+    router.push({ pathname: "/triage", params: { request: text } });
   };
+
+  const PROBLEM_CHIPS = [
+    { label: "Toothache", icon: "thermometer" },
+    { label: "Swelling", icon: "body" },
+    { label: "Broken Tooth", icon: "construct" },
+    { label: "Cleaning", icon: "sparkles" },
+    { label: "Kids", icon: "happy" },
+  ];
 
   return (
     <Screen>
@@ -66,9 +66,7 @@ export default function HomeScreen() {
           
           <Animated.View entering={FadeInDown.duration(600).springify()} style={styles.header}>
             <View style={styles.profileRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initial}</Text>
-              </View>
+              <View style={styles.avatar}><Text style={styles.avatarText}>{initial}</Text></View>
               <View>
                 <Text style={styles.greeting}>Welcome back,</Text>
                 <Text style={styles.name}>{displayName}</Text>
@@ -77,6 +75,18 @@ export default function HomeScreen() {
             <Pressable onPress={() => router.push("/settings")} style={styles.settingsBtn}>
               <Ionicons name="settings-outline" size={22} color={colors.text} />
             </Pressable>
+          </Animated.View>
+
+          {/* ONE-TAP PROBLEM CHIPS */}
+          <Animated.View entering={FadeInDown.delay(100).duration(600).springify()}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContainer}>
+              {PROBLEM_CHIPS.map((chip, i) => (
+                <Pressable key={i} style={styles.chip} onPress={() => handlePlan(chip.label)}>
+                  <Ionicons name={chip.icon as any} size={18} color={colors.accent} />
+                  <Text style={styles.chipText}>{chip.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(200).duration(600).springify()} style={styles.inputCard}>
@@ -97,38 +107,12 @@ export default function HomeScreen() {
               <Pressable style={[styles.iconBtn, isListening && { backgroundColor: colors.danger }]} onPress={toggleListening}>
                 <Ionicons name={isListening ? "stop" : "mic"} size={20} color={isListening ? "#FFF" : colors.accent} />
               </Pressable>
-              <Pressable style={styles.iconBtn} onPress={() => router.push("/chat")}>
-                <Ionicons name="chatbubbles" size={20} color={colors.accent} />
-              </Pressable>
-              <Button title="Generate Plan" onPress={handlePlan} disabled={!input.trim()} style={{ flex: 1, marginLeft: spacing.sm, height: 44 }} />
+              <Button title="Generate Plan" onPress={() => handlePlan()} disabled={!input.trim()} style={{ flex: 1, marginLeft: spacing.sm, height: 44 }} />
             </View>
           </Animated.View>
 
+          {/* HEALTH TOOLS GRID */}
           <Animated.View entering={FadeInUp.delay(300).duration(600).springify()}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <View style={styles.triageGrid}>
-              <Pressable style={styles.triageCard} onPress={() => setInput("My tooth hurts when I drink cold water")}>
-                <View style={[styles.triageIcon, { backgroundColor: "#FEE2E2" }]}>
-                  <Ionicons name="thermometer" size={24} color="#EF4444" />
-                </View>
-                <Text style={styles.triageTitle}>Tooth Pain</Text>
-              </Pressable>
-              <Pressable style={styles.triageCard} onPress={() => setInput("I need a routine dental cleaning")}>
-                <View style={[styles.triageIcon, { backgroundColor: "#E0F2FE" }]}>
-                  <Ionicons name="sparkles" size={24} color="#0EA5E9" />
-                </View>
-                <Text style={styles.triageTitle}>Cleaning</Text>
-              </Pressable>
-              <Pressable style={styles.triageCard} onPress={() => router.push("/emergency-aid")}>
-                <View style={[styles.triageIcon, { backgroundColor: "#FEF3C7" }]}>
-                  <Ionicons name="warning" size={24} color="#F59E0B" />
-                </View>
-                <Text style={styles.triageTitle}>First-Aid</Text>
-              </Pressable>
-            </View>
-          </Animated.View>
-
-          <Animated.View entering={FadeInUp.delay(400).duration(600).springify()}>
             <Text style={styles.sectionTitle}>Your Health</Text>
             <View style={styles.actionRow}>
               <Pressable style={styles.actionCard} onPress={() => router.push("/routine")}>
@@ -143,17 +127,9 @@ export default function HomeScreen() {
                 <Ionicons name="analytics" size={24} color={colors.accent} />
                 <Text style={styles.actionText}>Pain Journal</Text>
               </Pressable>
-              <Pressable style={styles.actionCard} onPress={() => router.push("/photos")}>
-                <Ionicons name="images" size={24} color={colors.accent} />
-                <Text style={styles.actionText}>Photos</Text>
-              </Pressable>
-              <Pressable style={styles.actionCard} onPress={() => router.push("/dental-profile")}>
-                <Ionicons name="person-circle-outline" size={24} color={colors.accent} />
-                <Text style={styles.actionText}>Dental Profile</Text>
-              </Pressable>
-              <Pressable style={styles.actionCard} onPress={() => router.push("/estimator")}>
-                <Ionicons name="calculator" size={24} color={colors.accent} />
-                <Text style={styles.actionText}>Cost Estimator</Text>
+              <Pressable style={styles.actionCard} onPress={() => router.push("/visit-notes")}>
+                <Ionicons name="document-text" size={24} color={colors.accent} />
+                <Text style={styles.actionText}>Visit Notes</Text>
               </Pressable>
             </View>
           </Animated.View>
@@ -166,32 +142,28 @@ export default function HomeScreen() {
 
 const createStyles = (colors: any) => StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: spacing.xl },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.xl },
-  
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.lg },
   profileRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 24, fontWeight: "800", color: "#FFF" },
   greeting: { fontSize: 14, fontWeight: "500", color: colors.textMuted, marginBottom: 2 },
   name: { fontSize: 22, fontWeight: "800", color: colors.text, letterSpacing: -0.5 },
+  settingsBtn: { padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
   
-  settingsBtn: { padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.full, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  
-  inputCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 4, marginBottom: spacing.xl },
+  chipsContainer: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg, paddingRight: spacing.lg },
+  chip: { flexDirection: "row", alignItems: "center", gap: spacing.xs, backgroundColor: colors.surface, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
+  chipText: { fontSize: 14, fontWeight: "600", color: colors.text },
+
+  inputCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.xl, borderWidth: 1, borderColor: colors.border },
   assistantHeader: { flexDirection: "row", alignItems: "center", marginBottom: spacing.sm },
-  assistantAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: spacing.sm, backgroundColor: colors.accentMuted },
+  assistantAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: spacing.sm },
   inputLabel: { fontSize: 16, fontWeight: "700", color: colors.text },
-  
   input: { fontSize: 16, color: colors.text, lineHeight: 24, minHeight: 70 },
   inputFooter: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
   iconBtn: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: colors.accentMuted, alignItems: "center", justifyContent: "center", marginRight: spacing.sm },
 
   sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.md },
-  triageGrid: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl },
-  triageCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2 },
-  triageIcon: { width: 56, height: 56, borderRadius: radius.full, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
-  triageTitle: { fontSize: 15, fontWeight: "600", color: colors.text },
-
   actionRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
-  actionCard: { width: "47%", backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2, gap: spacing.sm },
+  actionCard: { width: "47%", backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
   actionText: { fontSize: 14, fontWeight: "600", color: colors.text },
 });
