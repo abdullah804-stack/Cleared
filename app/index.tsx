@@ -1,6 +1,6 @@
 // app/index.tsx
 import { useState, useMemo } from "react";
-import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable, Image } from "react-native";
+import { StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, Pressable, Image, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Screen } from "../components/Screen";
@@ -9,16 +9,49 @@ import { useThemeColors, radius, spacing } from "../constants/theme";
 import { useAuth } from "../contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
+// SAFE IMPORT for Speech Recognition
+let ExpoSpeechRecognitionModule: any = null;
+let useSpeechRecognitionEvent: any = () => {};
+
+try {
+  const SpeechRecognition = require("expo-speech-recognition");
+  ExpoSpeechRecognitionModule = SpeechRecognition.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEvent = SpeechRecognition.useSpeechRecognitionEvent;
+} catch (e) {}
+
 export default function HomeScreen() {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   
   const [input, setInput] = useState("");
+  const [isListening, setIsListening] = useState(false);
   const router = useRouter();
   const { user, profile } = useAuth();
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "there";
   const initial = displayName.charAt(0).toUpperCase();
+
+  useSpeechRecognitionEvent("start", () => setIsListening(true));
+  useSpeechRecognitionEvent("end", () => setIsListening(false));
+  useSpeechRecognitionEvent("result", (event: any) => setInput(event.results[0]?.transcript || ""));
+  useSpeechRecognitionEvent("error", () => setIsListening(false));
+
+  const toggleListening = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!ExpoSpeechRecognitionModule) {
+      Alert.alert("Not Available", "Voice input requires the full APK build.");
+      return;
+    }
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+    } else {
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!result.granted) return;
+      
+      // URDU VOICE INPUT ENABLED
+      ExpoSpeechRecognitionModule.start({ lang: "ur-PK", interimResults: true });
+    }
+  };
 
   const handlePlan = () => {
     if (!input.trim()) return;
@@ -60,6 +93,9 @@ export default function HomeScreen() {
               textAlignVertical="top"
             />
             <View style={styles.inputFooter}>
+              <Pressable style={[styles.iconBtn, isListening && { backgroundColor: colors.danger }]} onPress={toggleListening}>
+                <Ionicons name={isListening ? "stop" : "mic"} size={20} color={isListening ? "#FFF" : colors.accent} />
+              </Pressable>
               <Pressable style={styles.iconBtn} onPress={() => router.push("/chat")}>
                 <Ionicons name="chatbubbles" size={20} color={colors.accent} />
               </Pressable>
@@ -68,7 +104,7 @@ export default function HomeScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInUp.delay(300).duration(600).springify()}>
-            <Text style={styles.sectionTitle}>Quick Triage</Text>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.triageGrid}>
               <Pressable style={styles.triageCard} onPress={() => setInput("My tooth hurts when I drink cold water")}>
                 <View style={[styles.triageIcon, { backgroundColor: "#FEE2E2" }]}>
@@ -81,6 +117,12 @@ export default function HomeScreen() {
                   <Ionicons name="sparkles" size={24} color="#0EA5E9" />
                 </View>
                 <Text style={styles.triageTitle}>Cleaning</Text>
+              </Pressable>
+              <Pressable style={styles.triageCard} onPress={() => router.push("/emergency-aid")}>
+                <View style={[styles.triageIcon, { backgroundColor: "#FEF3C7" }]}>
+                  <Ionicons name="warning" size={24} color="#F59E0B" />
+                </View>
+                <Text style={styles.triageTitle}>First-Aid</Text>
               </Pressable>
             </View>
           </Animated.View>
@@ -140,7 +182,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   input: { fontSize: 16, color: colors.text, lineHeight: 24, minHeight: 70 },
   inputFooter: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
-  iconBtn: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: colors.accentMuted, alignItems: "center", justifyContent: "center" },
+  iconBtn: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: colors.accentMuted, alignItems: "center", justifyContent: "center", marginRight: spacing.sm },
 
   sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.md },
   triageGrid: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl },
