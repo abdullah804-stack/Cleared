@@ -55,7 +55,8 @@ export default function HomeScreen() {
 
   const handlePlan = () => {
     if (!input.trim()) return;
-    router.push({ pathname: "/plan", params: { request: input.trim() } });
+    // Navigate to the Triage screen first!
+    router.push({ pathname: "/triage", params: { request: input.trim() } });
   };
 
   return (

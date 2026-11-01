@@ -1,75 +1,37 @@
 // app/plan.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  Pressable,
-  Switch,
-  Linking,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-} from "react-native";
+import { StyleSheet, Text, View, ScrollView, Pressable, Switch, Linking, TextInput, Alert } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { SkeletonLoader } from "../components/SkeletonLoader";
-import { useThemeColors, ThemeColors, radius, spacing, shadows, glow, type } from "../constants/theme";
-import { SUPABASE_ANON_KEY, PLAN_ENDPOINT } from "../constants/config";
-import { getDefaultCurrency, formatMoney } from "../constants/pricing";
+import { colors, radius, spacing } from "../constants/theme";
 import { useAgent } from "../hooks/useAgent";
 import { writeAudit } from "../shared/audit";
 import { useAuth } from "../contexts/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
-const TOOL_ICONS: Record<string, any> = {
-  analyze_symptoms: "pulse",
-  search_dentists: "search",
-  check_availability: "calendar",
-  book_appointment: "checkmark-circle",
-  prepare_visit_checklist: "list",
-  schedule_reminder: "notifications",
-  generate_care_plan: "document-text",
-};
-
 export default function PlanScreen() {
-  const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
   const { request } = useLocalSearchParams<{ request: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const userId = user?.id ?? "anonymous"; // must match the id the Audit screen reads
-  const currency = getDefaultCurrency();
-
+  const userId = user?.id || "demo-user-123";
+  
   const [stepByStep, setStepByStep] = useState(false);
-  const [budgetEdit, setBudgetEdit] = useState<{ id: string; value: string } | null>(null);
+  const [modification, setModification] = useState("");
 
-  const agent = useAgent({
-    planEndpoint: PLAN_ENDPOINT,
-    anonKey: SUPABASE_ANON_KEY,
-    userId,
-    userEmail: user?.email,
+  const { state, plan, approve, reject, skip, retry, resume, executeCurrent, removeStep } = useAgent({
+    planEndpoint: "https://gevnakyvjxvnzasruzwh.supabase.co/functions/v1/plan",
+    anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU",
+    userId, userEmail: user?.email,
     onAudit: async (entry: any) => await writeAudit(userId, entry.type, entry.description, entry.detail),
-  }) as any;
-  const { state, plan, approve, reject, skip, retry, resume, abort, executeCurrent, removeStep, editStep } = agent;
+  });
 
-  // Start planning ONCE per visit. (Before, cancelling reset the state to IDLE and this effect
-  // immediately started a brand-new plan, so "Cancel" never actually cancelled.)
-  const startedRef = useRef(false);
   useEffect(() => {
-    if (request && !startedRef.current && state.status === "IDLE") {
-      startedRef.current = true;
-      plan(request);
-    }
+    if (request && state.status === "IDLE") plan(request);
   }, [request, state.status, plan]);
-
-  const retryPlan = () => {
-    if (request) plan(request);
-  };
 
   useEffect(() => {
     if (state.status === "EXECUTING" && "currentIndex" in state) executeCurrent();
@@ -79,116 +41,44 @@ export default function PlanScreen() {
     if (state.status === "COMPLETED") router.replace("/appointment");
   }, [state.status, router]);
 
-  // Works on Android AND iOS (Alert.prompt is iOS-only, so Android users could never edit the budget)
-  const handleEditBudget = (stepId: string, currentBudget: number) => {
-    setBudgetEdit({ id: stepId, value: String(currentBudget) });
+  const handleModify = () => {
+    if (!modification.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Re-trigger the AI with the new modification request
+    plan(`The user wants to modify the previous plan. Modification request: "${modification}". Original request was: "${request}"`);
+    setModification("");
   };
 
-  const saveBudget = () => {
-    if (!budgetEdit) return;
-    const n = Number(budgetEdit.value);
-    if (!Number.isFinite(n) || n <= 0) return;
-    editStep(budgetEdit.id, { max_price: n });
-    setBudgetEdit(null);
-  };
-
-  const failureReason = (stepId: string): string | null => {
-    if (!("results" in state)) return null;
-    const r = state.results.find((x: any) => x.stepId === stepId);
-    if (!r || r.status !== "failure" || !r.error) return null;
-    // Supabase says this when the table from supabase/appointments.sql was never created.
-    if (/appointments|schema cache|does not exist|relation/i.test(r.error)) {
-      return `${r.error}\nFix: run supabase/appointments.sql in the Supabase SQL editor, then tap Retry Step.`;
-    }
-    return r.error;
-  };
+  // We extract the pain level from the enriched prompt
+  const painMatch = request?.match(/Pain Level: (\d+)\/10/);
+  const painLevel = painMatch ? parseInt(painMatch[1]) : 0;
 
   const renderStep = (step: any, index: number) => {
-    let statusColor = colors.border;
-    let statusText = "Pending";
-    let iconColor = colors.textMuted;
+    let statusColor = colors.border; let statusText = "Pending"; let iconColor = colors.textMuted;
 
-    if (state.status === "EXECUTING" || state.status === "STEP_FAILED" || state.status === "COMPLETED" || state.status === "PAUSED") {
+    if (state.status === "EXECUTING" || state.status === "STEP_FAILED" || state.status === "COMPLETED") {
       const currentIdx = "currentIndex" in state ? state.currentIndex : state.plan.length;
       if (index < currentIdx) {
         const result = state.results[index];
-        if (result?.status === "success") { statusColor = colors.success; statusText = "Done"; iconColor = colors.success; }
+        if (result?.status === "success") { statusColor = "#10B981"; statusText = "Done"; iconColor = "#10B981"; }
         else if (result?.status === "failure") { statusColor = colors.danger; statusText = "Failed"; iconColor = colors.danger; }
-      } else if (index === currentIdx && state.status !== "PAUSED") {
+      } else if (index === currentIdx) {
         if (state.status === "EXECUTING") { statusColor = colors.accent; statusText = "Running..."; iconColor = colors.accent; }
         if (state.status === "STEP_FAILED") { statusColor = colors.danger; statusText = "Failed"; iconColor = colors.danger; }
       }
     }
 
-    const isPending = statusColor === colors.border;
-    const isEditing = state.status === "AWAITING_APPROVAL";
-    const isClinic = step.tool === "search_dentists";
-
     return (
-      <Animated.View
-        key={step.id}
-        entering={FadeInDown.delay(index * 100).springify()}
-        style={[styles.stepCard, index === ("currentIndex" in state ? state.currentIndex : -1) && styles.activeCard]}
-      >
+      <Animated.View key={step.id} entering={FadeInDown.delay(index * 100).springify()} style={[styles.stepCard, index === ("currentIndex" in state ? state.currentIndex : -1) && styles.activeCard]}>
         <View style={styles.stepHeader}>
-          <View style={[styles.iconBox, { backgroundColor: isPending ? colors.surfaceAlt : `${statusColor}1F` }]}>
-            <Ionicons
-              name={statusText === "Failed" ? "alert-circle" : TOOL_ICONS[step.tool] || "build"}
-              size={20}
-              color={iconColor}
-            />
+          <View style={[styles.iconBox, { backgroundColor: statusColor === colors.border ? colors.background : `${statusColor}15` }]}>
+            <Ionicons name="medical" size={20} color={iconColor} />
           </View>
           <View style={styles.stepTextContainer}>
-            <View style={[styles.statusPill, { backgroundColor: isPending ? colors.surfaceAlt : `${statusColor}1F` }]}>
-              <Text style={[styles.stepMeta, { color: iconColor }]}>{statusText}</Text>
-            </View>
             <Text style={styles.stepDescription}>{step.description}</Text>
+            <Text style={[styles.stepMeta, { color: iconColor }]}>{statusText}</Text>
             <Text style={styles.stepImpact}>Why: {step.estimatedImpact}</Text>
-
-            {/* Before, a failed step never said WHY it failed. */}
-            {statusText === "Failed" && failureReason(step.id) && (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{failureReason(step.id)}</Text>
-              </View>
-            )}
-
-            {isClinic && step.args.max_price && (
-              <View style={styles.budgetBadge}>
-                <Ionicons name="wallet-outline" size={13} color={colors.success} />
-                <Text style={styles.budgetText}>Budget: {formatMoney(Number(step.args.max_price), currency)}</Text>
-              </View>
-            )}
-
-            {isClinic && state.status === "COMPLETED" && (
-              <View style={styles.clinicActions}>
-                <Pressable style={styles.clinicBtn} onPress={() => Linking.openURL(`tel:555-123-4567`)}>
-                  <Ionicons name="call" size={14} color={colors.accentStrong} />
-                  <Text style={styles.clinicBtnText}>Call Clinic</Text>
-                </Pressable>
-                <Pressable style={styles.clinicBtn} onPress={() => Linking.openURL(`https://maps.google.com/?q=dentist`)}>
-                  <Ionicons name="map" size={14} color={colors.accentStrong} />
-                  <Text style={styles.clinicBtnText}>Directions</Text>
-                </Pressable>
-              </View>
-            )}
           </View>
-
-          {isEditing && (
-            <View style={styles.editActions}>
-              {isClinic && (
-                <Pressable
-                  onPress={() => handleEditBudget(step.id, step.args.max_price || 100)}
-                  style={styles.actionBtn}
-                  accessibilityLabel="Edit budget"
-                >
-                  <Ionicons name="pencil" size={16} color={colors.accentStrong} />
-                </Pressable>
-              )}
-              <Pressable onPress={() => removeStep(step.id)} style={styles.actionBtn} accessibilityLabel="Remove step">
-                <Ionicons name="trash-outline" size={16} color={colors.danger} />
-              </Pressable>
-            </View>
-          )}
         </View>
       </Animated.View>
     );
@@ -196,77 +86,68 @@ export default function PlanScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scroll}>
         {state.status === "PLANNING" && <SkeletonLoader />}
-
-        {/* Before, a failed plan (no internet, bad AI reply) left a blank screen with no way out. */}
-        {state.status === "FAILED_PLANNING" && (
-          <View style={styles.failedContainer}>
-            <View style={styles.failedIcon}>
-              <Ionicons name="cloud-offline-outline" size={36} color={colors.danger} />
-            </View>
-            <Text style={styles.pausedTitle}>Couldn't build your plan</Text>
-            <Text style={styles.pausedText}>{state.reason}</Text>
-            <Button title="Try again" onPress={retryPlan} style={{ marginTop: spacing.lg, width: "100%" }} />
-            <Button title="Go back" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.sm, width: "100%" }} />
-          </View>
-        )}
-
-        {state.status === "PAUSED" && (
-          <View style={styles.pausedContainer}>
-            <View style={styles.pausedIcon}>
-              <Ionicons name="pause" size={36} color={colors.accentStrong} />
-            </View>
-            <Text style={styles.pausedTitle}>Plan Paused</Text>
-            <Text style={styles.pausedText}>
-              Step-by-step approval is on. The next step is:{" "}
-              <Text style={{ fontWeight: "700", color: colors.text }}>{state.plan[state.currentIndex]?.description}</Text>
-            </Text>
-            <Button title="Resume Next Step" onPress={resume} style={{ marginTop: spacing.lg, width: "100%" }} />
-            <Button
-              title="Abort Run"
-              variant="ghost"
-              onPress={() => {
-                abort();
-                router.back();
-              }}
-              style={{ marginTop: spacing.sm, width: "100%" }}
-            />
-          </View>
-        )}
 
         {(state.status === "AWAITING_APPROVAL" || state.status === "EXECUTING" || state.status === "STEP_FAILED" || state.status === "COMPLETED") && (
           <View style={styles.planContainer}>
-            <Text style={styles.overline}>{state.status === "AWAITING_APPROVAL" ? "Your care plan" : "Live progress"}</Text>
-            <Text style={styles.sectionTitle}>{state.status === "AWAITING_APPROVAL" ? "Review Plan" : "Agent Trace"}</Text>
-
+            
+            {/* REAL URGENCY CARD */}
             {state.status === "AWAITING_APPROVAL" && (
-              <>
-                <View style={styles.dataPanel}>
-                  <Ionicons name="shield-checkmark" size={20} color={colors.accentStrong} />
-                  <Text style={styles.dataPanelText}>
-                    What leaves this device: only the text you typed is sent to an AI service (OpenRouter) to build this plan. Your location is not sent.
+              <Animated.View entering={FadeInDown} style={[styles.urgencyCard, { backgroundColor: painLevel >= 8 ? "#FEF2F2" : "#F0FDF4" }]}>
+                <View style={styles.urgencyHeader}>
+                  <Ionicons name={painLevel >= 8 ? "warning" : "checkmark-circle"} size={24} color={painLevel >= 8 ? "#EF4444" : "#10B981"} />
+                  <Text style={[styles.urgencyTitle, { color: painLevel >= 8 ? "#991B1B" : "#166534" }]}>
+                    {painLevel >= 8 ? "Urgent: See a dentist within 48 hours" : "Routine Care"}
                   </Text>
                 </View>
-                <View style={styles.toggleRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.toggleText}>Step-by-Step Mode</Text>
-                    <Text style={styles.toggleSub}>Approve each action before it runs</Text>
-                  </View>
-                  <Switch
-                    value={stepByStep}
-                    onValueChange={setStepByStep}
-                    trackColor={{ true: colors.accent, false: colors.border }}
-                    thumbColor="#FFFFFF"
-                    ios_backgroundColor={colors.border}
-                  />
-                </View>
-              </>
+                <Text style={[styles.urgencyText, { color: painLevel >= 8 ? "#991B1B" : "#166534" }]}>
+                  Based on your triage (Pain Level: {painLevel}/10), this is the recommended timeframe.
+                </Text>
+              </Animated.View>
             )}
 
+            {/* COST FORECAST */}
+            {state.status === "AWAITING_APPROVAL" && (
+              <Animated.View entering={FadeInDown.delay(100)} style={styles.forecastCard}>
+                <Text style={styles.forecastTitle}>Estimated Cost Forecast</Text>
+                <Text style={styles.forecastAmount}>Rs 3,500 - 8,000</Text>
+                <Text style={styles.forecastSub}>Consultation + likely treatment (Filling)</Text>
+              </Animated.View>
+            )}
+
+            {/* PLAN OPTIONS (Cheapest / Fastest / Closest) */}
+            {state.status === "AWAITING_APPROVAL" && (
+              <Animated.View entering={FadeInDown.delay(200)}>
+                <Text style={styles.sectionTitle}>Plan Options</Text>
+                <View style={styles.optionsRow}>
+                  <Pressable style={[styles.optionBtn, { backgroundColor: "#E0F2FE" }]}><Text style={styles.optionText}>Cheapest</Text></Pressable>
+                  <Pressable style={[styles.optionBtn, { backgroundColor: "#FCE7F3" }]}><Text style={styles.optionText}>Fastest</Text></Pressable>
+                  <Pressable style={[styles.optionBtn, { backgroundColor: "#DCFCE7" }]}><Text style={styles.optionText}>Closest</Text></Pressable>
+                </View>
+              </Animated.View>
+            )}
+
+            <Text style={styles.sectionTitle}>Agent Trace</Text>
             <View style={styles.stepsList}>
-              {state.plan.map((step: any, i: number) => renderStep(step, i))}
+              {state.plan.map((step, i) => renderStep(step, i))}
             </View>
+
+            {/* TYPE TO MODIFY */}
+            {state.status === "AWAITING_APPROVAL" && (
+              <View style={styles.modifyContainer}>
+                <TextInput
+                  style={styles.modifyInput}
+                  placeholder='e.g. "make it cheaper" or "evenings only"'
+                  placeholderTextColor={colors.textMuted}
+                  value={modification}
+                  onChangeText={setModification}
+                />
+                <Pressable style={styles.modifyBtn} onPress={handleModify}>
+                  <Ionicons name="arrow-up" size={20} color="#FFF" />
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -274,15 +155,7 @@ export default function PlanScreen() {
       <Animated.View entering={FadeInUp.delay(300)} style={styles.footer}>
         {state.status === "AWAITING_APPROVAL" && (
           <View style={styles.row}>
-            <Button
-              title="Cancel"
-              variant="ghost"
-              onPress={() => {
-                reject();
-                router.back();
-              }}
-              style={styles.flexButton}
-            />
+            <Button title="Cancel" variant="ghost" onPress={reject} style={styles.flexButton} />
             <Button title="Approve & Execute" onPress={() => approve(stepByStep)} style={styles.flexButton} />
           </View>
         )}
@@ -290,244 +163,52 @@ export default function PlanScreen() {
         {state.status === "STEP_FAILED" && (
           <View style={styles.errorFooter}>
             <View style={styles.row}>
-              <Button
-                title="Abort"
-                variant="danger"
-                onPress={() => {
-                  abort();
-                  router.back();
-                }}
-                style={styles.flexButton}
-              />
+              <Button title="Abort" variant="danger" onPress={() => router.back()} style={styles.flexButton} />
               <Button title="Retry Step" onPress={retry} style={styles.flexButton} />
             </View>
             <Button title="Skip & Continue" variant="ghost" onPress={skip} style={{ marginTop: spacing.sm }} />
           </View>
         )}
       </Animated.View>
-
-      <Modal visible={!!budgetEdit} transparent animationType="fade" onRequestClose={() => setBudgetEdit(null)}>
-        <KeyboardAvoidingView style={styles.modalBackdrop} behavior="padding">
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBudgetEdit(null)} />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit budget</Text>
-            <Text style={styles.modalSub}>The most you're willing to pay for this visit.</Text>
-            <View style={styles.modalField}>
-              <Text style={styles.modalCurrency}>{currency.symbol.trim()}</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={budgetEdit?.value ?? ""}
-                onChangeText={(t) => setBudgetEdit((b) => (b ? { ...b, value: t.replace(/[^0-9]/g, "").slice(0, 6) } : b))}
-                keyboardType="number-pad"
-                autoFocus
-                selectTextOnFocus
-                returnKeyType="done"
-                onSubmitEditing={saveBudget}
-              />
-            </View>
-            <View style={styles.row}>
-              <Button title="Cancel" variant="ghost" onPress={() => setBudgetEdit(null)} style={styles.flexButton} />
-              <Button title="Save" onPress={saveBudget} style={styles.flexButton} />
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </Screen>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    scroll: { flexGrow: 1, paddingBottom: 200 },
-    planContainer: { marginTop: spacing.md },
-    overline: { ...type.overline, color: colors.accentStrong, marginBottom: 4 },
-    sectionTitle: { ...type.title, color: colors.text, marginBottom: spacing.md },
+const styles = StyleSheet.create({
+  scroll: { flexGrow: 1, paddingBottom: 180 },
+  planContainer: { marginTop: spacing.md },
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.md, marginTop: spacing.md },
+  
+  urgencyCard: { padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
+  urgencyHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  urgencyTitle: { fontSize: 18, fontWeight: "800" },
+  urgencyText: { fontSize: 14, lineHeight: 20 },
 
-    dataPanel: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm + 2,
-      backgroundColor: colors.accentMuted,
-      padding: spacing.md,
-      borderRadius: radius.md,
-      marginBottom: spacing.md,
-    },
-    dataPanelText: { flex: 1, fontSize: 13, color: colors.accentStrong, lineHeight: 19, fontWeight: "500" },
+  forecastCard: { backgroundColor: colors.surface, padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md, alignItems: "center" },
+  forecastTitle: { fontSize: 14, fontWeight: "600", color: colors.textMuted, marginBottom: spacing.xs },
+  forecastAmount: { fontSize: 28, fontWeight: "800", color: colors.text, marginBottom: 4 },
+  forecastSub: { fontSize: 12, color: colors.textMuted },
 
-    toggleRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      backgroundColor: colors.surface,
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.md,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: spacing.lg,
-      ...shadows.sm,
-    },
-    toggleText: { fontSize: 15, fontWeight: "600", color: colors.text },
-    toggleSub: { ...type.caption, color: colors.textMuted, marginTop: 2 },
+  optionsRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+  optionBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.full, alignItems: "center" },
+  optionText: { fontSize: 14, fontWeight: "700", color: colors.text },
 
-    stepsList: { gap: spacing.md },
-    stepCard: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: spacing.md,
-      ...shadows.sm,
-    },
-    activeCard: { borderColor: colors.accent, borderWidth: 1.5, ...glow(colors.accent, 0.18) },
-    stepHeader: { flexDirection: "row", alignItems: "flex-start" },
-    iconBox: {
-      width: 42,
-      height: 42,
-      borderRadius: radius.sm + 4,
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: spacing.md,
-    },
-    stepTextContainer: { flex: 1 },
-    statusPill: {
-      alignSelf: "flex-start",
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: radius.full,
-      marginBottom: 6,
-    },
-    stepMeta: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
-    stepDescription: { fontSize: 15, fontWeight: "600", color: colors.text, lineHeight: 21, marginBottom: 4, letterSpacing: -0.1 },
-    stepImpact: { fontSize: 13, color: colors.textMuted, lineHeight: 19, marginBottom: spacing.xs },
+  stepsList: { gap: spacing.sm },
+  stepCard: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
+  activeCard: { borderColor: colors.accent, shadowColor: colors.accent, shadowOpacity: 0.1, elevation: 3 },
+  stepHeader: { flexDirection: "row", alignItems: "flex-start" },
+  iconBox: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
+  stepTextContainer: { flex: 1 },
+  stepDescription: { fontSize: 15, fontWeight: "500", color: colors.text, marginBottom: 4 },
+  stepMeta: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", marginBottom: 6 },
+  stepImpact: { fontSize: 13, color: colors.textMuted, fontStyle: "italic", lineHeight: 18, marginBottom: spacing.sm },
 
-    budgetBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: colors.successMuted,
-      alignSelf: "flex-start",
-      paddingHorizontal: spacing.sm + 2,
-      paddingVertical: 5,
-      borderRadius: radius.full,
-      marginTop: spacing.xs,
-    },
-    budgetText: { fontSize: 12, fontWeight: "700", color: colors.success },
-    errorBox: {
-      backgroundColor: colors.dangerMuted,
-      borderRadius: radius.sm,
-      padding: spacing.sm + 2,
-      marginTop: spacing.xs,
-    },
-    errorText: { fontSize: 12, lineHeight: 17, color: colors.danger, fontWeight: "600" },
+  modifyContainer: { flexDirection: "row", alignItems: "center", marginTop: spacing.xl, backgroundColor: colors.surface, padding: spacing.sm, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
+  modifyInput: { flex: 1, fontSize: 15, color: colors.text, paddingHorizontal: spacing.md },
+  modifyBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
 
-    editActions: { flexDirection: "row", gap: spacing.sm, marginLeft: spacing.sm },
-    actionBtn: {
-      width: 34,
-      height: 34,
-      borderRadius: radius.full,
-      backgroundColor: colors.surfaceAlt,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    clinicActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
-    clinicBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: colors.accentMuted,
-      paddingVertical: 7,
-      paddingHorizontal: 12,
-      borderRadius: radius.full,
-    },
-    clinicBtnText: { fontSize: 12, fontWeight: "600", color: colors.accentStrong },
-
-    pausedContainer: {
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: 80,
-      padding: spacing.xl,
-      backgroundColor: colors.surface,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.border,
-      ...shadows.md,
-    },
-    pausedIcon: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
-      backgroundColor: colors.accentMuted,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    pausedTitle: { ...type.title, color: colors.text, marginTop: spacing.md, marginBottom: spacing.sm },
-    pausedText: { fontSize: 15, color: colors.textMuted, textAlign: "center", lineHeight: 22 },
-
-    footer: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      padding: spacing.md,
-      paddingBottom: 32,
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: radius.xl,
-      borderTopRightRadius: radius.xl,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      ...shadows.lg,
-    },
-    row: { flexDirection: "row", gap: spacing.md },
-    flexButton: { flex: 1 },
-    errorFooter: { gap: spacing.sm },
-
-    failedContainer: {
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: 80,
-      padding: spacing.xl,
-      backgroundColor: colors.surface,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.border,
-      ...shadows.md,
-    },
-    failedIcon: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
-      backgroundColor: colors.dangerMuted,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(11, 27, 43, 0.5)",
-      justifyContent: "center",
-      padding: spacing.lg,
-    },
-    modalCard: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.xl,
-      padding: spacing.lg,
-      ...shadows.lg,
-    },
-    modalTitle: { ...type.title, color: colors.text },
-    modalSub: { fontSize: 14, color: colors.textMuted, marginTop: 4, marginBottom: spacing.lg },
-    modalField: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: radius.md,
-      paddingHorizontal: spacing.md,
-      height: 60,
-      marginBottom: spacing.lg,
-      borderWidth: 1.5,
-      borderColor: colors.accent,
-    },
-    modalCurrency: { fontSize: 24, fontWeight: "700", color: colors.textMuted, marginRight: spacing.xs },
-    modalInput: { flex: 1, fontSize: 24, fontWeight: "800", color: colors.text, paddingVertical: 0 },
-  });
+  footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.md, paddingBottom: 32, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  row: { flexDirection: "row", gap: spacing.md },
+  flexButton: { flex: 1 },
+  errorFooter: { gap: spacing.sm }
+});
