@@ -21,21 +21,27 @@ export async function initRecoveryDb() {
 export async function toggleRecoveryDay(day: number, completed: boolean) {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO recovery_progress (day, completed) VALUES (?, ?) 
+    `INSERT INTO recovery_progress (day, completed) VALUES (?, ?)
      ON CONFLICT(day) DO UPDATE SET completed = ?`,
-    day, completed ? 1 : 0, completed ? 1 : 0
+    day,
+    completed ? 1 : 0,
+    completed ? 1 : 0
   );
 }
 
 export async function getRecoveryProgress(): Promise<Record<number, boolean>> {
   const db = await getDb();
-  const rows = await db.getAllAsync<{ day: number; completed: number }>(
-    `SELECT day, completed FROM recovery_progress`
-  );
-  
+  const rows = await db.getAllAsync<{ day: number; completed: number }>(`SELECT day, completed FROM recovery_progress`);
+
   const progress: Record<number, boolean> = {};
-  rows.forEach(row => {
+  rows.forEach((row) => {
     progress[row.day] = row.completed === 1;
   });
   return progress;
+}
+
+/** Starts the recovery plan over (and used by "Delete My Data"). */
+export async function clearRecovery() {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM recovery_progress`);
 }

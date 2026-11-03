@@ -1,7 +1,8 @@
 // app/emergency.tsx
-import { useMemo } from "react";
-import { StyleSheet, Text, View, Linking, Pressable } from "react-native";
-import { useRouter } from "expo-router";
+import { useEffect, useMemo } from "react";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { useRouter, type Href } from "expo-router";
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Screen } from "../components/Screen";
@@ -34,8 +35,16 @@ export default function EmergencyScreen() {
   const router = useRouter();
   const number = useMemo(getEmergencyNumber, []);
 
+  // Slow breathing pulse on the halo so the screen feels alive but calm.
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    pulse.value = withRepeat(withTiming(1, { duration: 1400 }), -1, true);
+  }, []);
+  const halo = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.1 }], opacity: 0.7 + pulse.value * 0.3 }));
+
   const callEmergency = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     Linking.openURL(`tel:${number}`);
   };
 
@@ -43,18 +52,20 @@ export default function EmergencyScreen() {
 
   return (
     <Screen style={styles.container}>
-      <View style={styles.halo}>
+      <Animated.View style={[styles.halo, halo]}>
         <View style={styles.iconBox}>
           <Ionicons name="warning" size={44} color={colors.onDanger} />
         </View>
-      </View>
+      </Animated.View>
 
-      <Text style={styles.title}>Seek urgent care</Text>
-      <Text style={styles.subtitle}>
+      <Animated.Text entering={FadeInDown.delay(100).duration(400)} style={styles.title}>
+        Seek urgent care
+      </Animated.Text>
+      <Animated.Text entering={FadeInDown.delay(180).duration(400)} style={styles.subtitle}>
         Based on your symptoms, this may be a dental emergency. Please don't wait for a regular appointment.
-      </Text>
+      </Animated.Text>
 
-      <View style={styles.card}>
+      <Animated.View entering={FadeInDown.delay(260).duration(400)} style={styles.card}>
         <Text style={styles.cardTitle}>Call emergency services</Text>
         <Pressable
           style={({ pressed }) => [styles.callButton, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
@@ -67,9 +78,12 @@ export default function EmergencyScreen() {
         </Pressable>
         <Text style={styles.caption}>Number based on your phone's region. Not right?</Text>
         <Text style={styles.caption}>Pakistan 1122 · US/Canada 911 · UK 999 · Europe & most others 112</Text>
-      </View>
+      </Animated.View>
 
-      <Button title="Find an emergency dentist nearby" variant="ghost" onPress={findUrgentCare} style={{ width: "100%", marginTop: spacing.md }} />
+      <Animated.View entering={FadeInDown.delay(340).duration(400)} style={{ width: "100%", gap: spacing.sm + 2, marginTop: spacing.md }}>
+        <Button title="Find an emergency dentist nearby" icon="navigate" variant="ghost" onPress={findUrgentCare} />
+        <Button title="First-aid steps while you wait" icon="medkit" variant="soft" onPress={() => router.push("/emergency-aid" as Href)} />
+      </Animated.View>
 
       <Pressable onPress={() => router.back()} style={styles.back} hitSlop={10}>
         <Text style={styles.backText}>Go back</Text>
@@ -125,7 +139,7 @@ const createStyles = (colors: ThemeColors) =>
       ...glow(colors.danger, 0.3),
     },
     callText: { color: colors.onDanger, fontSize: 18, fontWeight: "700" },
-    caption: { ...type.caption, color: colors.textMuted, marginTop: spacing.sm },
+    caption: { ...type.caption, color: colors.textMuted, marginTop: spacing.sm, textAlign: "center" },
     back: { marginTop: spacing.lg, padding: spacing.sm },
     backText: { color: colors.textMuted, fontWeight: "600", fontSize: 15 },
   });

@@ -1,94 +1,103 @@
 // components/Button.tsx
-import { useMemo } from "react";
-import { Pressable, Text, StyleSheet, ActivityIndicator, ViewStyle } from "react-native";
+import { ComponentProps, ReactNode } from "react";
+import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { useThemeColors, ThemeColors, radius, spacing, shadows, glow } from "../constants/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { Gradient } from "./Gradient";
+import { useThemeColors, radius, spacing, glow, gradients, motion } from "../constants/theme";
 
-interface ButtonProps {
+type Variant = "primary" | "soft" | "ghost" | "danger";
+
+export function Button({
+  title,
+  onPress,
+  variant = "primary",
+  loading = false,
+  disabled = false,
+  icon,
+  style,
+  accessibilityLabel,
+}: {
   title: string;
   onPress: () => void;
-  variant?: "primary" | "ghost" | "danger" | "soft";
-  disabled?: boolean;
+  variant?: Variant;
   loading?: boolean;
-  style?: ViewStyle;
-}
-
-export function Button({ title, onPress, variant = "primary", disabled = false, loading = false, style }: ButtonProps) {
+  disabled?: boolean;
+  icon?: ComponentProps<typeof Ionicons>["name"];
+  style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
+}) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  const isPrimary = variant === "primary";
-  const isDanger = variant === "danger";
-  const isGhost = variant === "ghost";
-  const isSoft = variant === "soft";
+  const scale = useSharedValue(1);
+  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const inactive = disabled || loading;
 
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
-  };
+  const textColor =
+    variant === "primary" ? colors.onAccent : variant === "danger" ? colors.onDanger : variant === "soft" ? colors.accentStrong : colors.text;
 
-  const spinnerColor = isPrimary ? colors.onAccent : isDanger ? colors.onDanger : colors.accent;
+  const content: ReactNode = loading ? (
+    <ActivityIndicator color={textColor} />
+  ) : (
+    <View style={styles.row}>
+      {icon && <Ionicons name={icon} size={18} color={textColor} />}
+      <Text style={[styles.text, { color: textColor }]} numberOfLines={1}>
+        {title}
+      </Text>
+    </View>
+  );
+
+  const surface: ViewStyle =
+    variant === "danger"
+      ? { backgroundColor: colors.danger }
+      : variant === "soft"
+        ? { backgroundColor: colors.accentMuted }
+        : variant === "ghost"
+          ? { backgroundColor: "transparent", borderWidth: 1.5, borderColor: colors.border }
+          : {};
 
   return (
-    <Pressable
-      onPress={handlePress}
-      disabled={inactive}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: inactive }}
-      style={({ pressed }) => [
-        styles.base,
-        isPrimary && styles.primary,
-        isSoft && styles.soft,
-        isGhost && styles.ghost,
-        isDanger && styles.danger,
-        inactive && styles.disabled,
-        pressed && !inactive && styles.pressed,
+    <Animated.View
+      style={[
+        animated,
+        variant === "primary" && !inactive && glow(colors.accent, 0.3),
+        variant === "danger" && !inactive && glow(colors.danger, 0.22),
+        inactive && { opacity: 0.55 },
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={spinnerColor} />
-      ) : (
-        <Text
-          style={[
-            styles.text,
-            isPrimary && styles.textPrimary,
-            isDanger && styles.textDanger,
-            isSoft && styles.textSoft,
-            isGhost && styles.textGhost,
-          ]}
-        >
-          {title}
-        </Text>
-      )}
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? title}
+        accessibilityState={{ disabled: inactive, busy: loading }}
+        disabled={inactive}
+        onPressIn={() => (scale.value = withSpring(0.97, motion.press))}
+        onPressOut={() => (scale.value = withSpring(1, motion.press))}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          onPress();
+        }}
+      >
+        {variant === "primary" ? (
+          <Gradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.base}>
+            {content}
+          </Gradient>
+        ) : (
+          <View style={[styles.base, surface]}>{content}</View>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    base: {
-      height: 54,
-      borderRadius: radius.md,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: spacing.lg,
-    },
-    primary: { backgroundColor: colors.accent, ...glow(colors.accent, 0.25) },
-    soft: { backgroundColor: colors.accentMuted },
-    ghost: {
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-      ...shadows.sm,
-    },
-    danger: { backgroundColor: colors.danger, ...glow(colors.danger, 0.2) },
-    disabled: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
-    pressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
-    text: { fontSize: 16, fontWeight: "600", letterSpacing: -0.1 },
-    textPrimary: { color: colors.onAccent },
-    textDanger: { color: colors.onDanger },
-    textSoft: { color: colors.accentStrong },
-    textGhost: { color: colors.text },
-  });
+const styles = StyleSheet.create({
+  base: {
+    height: 54,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  text: { fontSize: 16, fontWeight: "700", letterSpacing: 0.1 },
+});

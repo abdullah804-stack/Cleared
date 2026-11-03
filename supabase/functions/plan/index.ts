@@ -4,7 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY");
 const MODEL = Deno.env.get("OPENROUTER_MODEL") || "openrouter/free";
-const MAX_INPUT_CHARS = 500; // stops someone burning your AI credits with huge prompts
+const MAX_INPUT_CHARS = 1500; // stops someone burning your AI credits with huge prompts
 
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });

@@ -7,6 +7,10 @@ import { executeTool } from "../shared/tools";
 import { PlanSchema } from "../shared/schema";
 import { getDefaultCurrency } from "../constants/pricing";
 
+function isEmergency(text?: string): boolean {
+  return /\b(chest pain|can't breathe|cannot breathe|difficulty breathing|shortness of breath|unconscious|not breathing|severe bleeding|stroke|suicid(?:al|e)|overdose)\b/i.test(text ?? "");
+}
+
 export type AgentState =
   | { status: "IDLE" }
   | { status: "PLANNING"; input: string }
@@ -145,16 +149,6 @@ interface UseAgentOptions {
   onAudit?: (entry: { type: string; description: string; detail?: Record<string, unknown> }) => void | Promise<void>;
 }
 
-// Words that mean "stop planning, get urgent help". English + Urdu.
-const EMERGENCY_WORDS = [
-  "swell", "fever", "breath", "swallow", "trauma", "accident", "blood", "unconscious", "chest pain", "knocked out",
-  "سوجن", "بخار", "خون", "سانس", "نگل",
-];
-const isEmergency = (text: string) => {
-  const lower = text.toLowerCase();
-  return EMERGENCY_WORDS.some((w) => lower.includes(w));
-};
-
 function friendlyError(err: any): string {
   if (err?.name === "AbortError") return "The request took too long.";
   if (err?.name === "ZodError") return "The AI returned a plan we couldn't read.";
@@ -183,11 +177,13 @@ export function useAgent(opts: UseAgentOptions) {
   }, []);
 
   const plan = useCallback(
-    async (input: string) => {
+    // emergencyText = ONLY what the person typed. The text sent to the AI also contains triage lines like
+    // "Swelling: No", and scanning that would flag every single request as an emergency.
+    async (input: string, opts?: { emergencyText?: string }) => {
       dispatch({ type: "PLAN_START", input });
       audit("request.received", "Asked for a care plan", { input });
 
-      if (isEmergency(input)) {
+      if (isEmergency(opts?.emergencyText ?? input)) {
         audit("emergency.detected", "Emergency keywords found, sent to urgent-care screen");
         dispatch({ type: "PLAN_FAILED", reason: "Emergency detected." });
         router.replace("/emergency"); // replace, so "Go back" returns home instead of a dead plan screen
@@ -310,11 +306,6 @@ export function useAgent(opts: UseAgentOptions) {
       if (result.ok) {
         if (step.tool === "generate_care_plan") {
           await AsyncStorage.setItem("current_care_plan", result.output);
-        }
-        if (step.tool === "book_appointment") {
-          const parsed = JSON.parse(result.output);
-          if (parsed.clinic_phone) await AsyncStorage.setItem("clinic_phone", parsed.clinic_phone);
-          if (parsed.clinic_name) await AsyncStorage.setItem("clinic_name", parsed.clinic_name);
         }
         // The appointment screen reads this; without it it always showed "tomorrow 10:00".
         if (step.tool === "book_appointment") {

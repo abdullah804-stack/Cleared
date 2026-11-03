@@ -13,6 +13,7 @@ export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU";
 
 export const PLAN_ENDPOINT = `${SUPABASE_URL}/functions/v1/plan`;
+export const CHAT_ENDPOINT = `${SUPABASE_URL}/functions/v1/chat`;
 
 // While availability + booking are simulated (see shared/tools.ts), the app says so on the
 // appointment screen. Set to false ONLY once bookings really reach a clinic.

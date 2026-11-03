@@ -1,135 +1,226 @@
 // app/chat.tsx
-import { useState, useRef } from "react";
-import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
-import { useRouter } from "expo-router";
+// AI dental assistant. Chat history is kept on the phone only. Calls the Supabase `chat` function with the user's own session token.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ElementRef } from "react";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useNavigation, useRouter } from "expo-router";
+import Animated, { FadeInDown, FadeIn, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
-import { Screen } from "../components/Screen";
-import { colors, radius, spacing } from "../constants/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Screen } from "../components/Screen";
+import { Gradient } from "../components/Gradient";
+import { useThemeColors, ThemeColors, gradients, radius, spacing, shadows } from "../constants/theme";
+import { CHAT_ENDPOINT, SUPABASE_ANON_KEY } from "../constants/config";
+import { isEmergency } from "../constants/emergency";
+import { supabase } from "../contexts/AuthContext";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-}
+type Message = { id: string; role: "user" | "assistant"; content: string };
 
-const INITIAL_MESSAGE: Message = {
+const WELCOME: Message = {
   id: "welcome",
   role: "assistant",
-  content: "Hi there! I'm Cleared, your AI dental assistant. Do you have any questions about your symptoms, a procedure, or your care plan? (Please note: I am an AI, not a doctor).",
+  content: "Hi, I'm Cleared. Ask me about a symptom, a procedure or your care plan. I'm an AI, not a doctor, so for anything serious please see a dentist.",
 };
 
+const SUGGESTIONS = ["Is a toothache normal after a filling?", "How do I ease swelling at home?", "What happens in a root canal?", "Can I eat after an extraction?"];
+const MAX_KEPT = 40;
+
+function Dot({ delay }: { delay: number }) {
+  const colors = useThemeColors();
+  const v = useSharedValue(0.3);
+  useEffect(() => {
+    v.value = withDelay(delay, withRepeat(withSequence(withTiming(1, { duration: 420 }), withTiming(0.3, { duration: 420 })), -1));
+  }, []);
+  const style = useAnimatedStyle(() => ({ opacity: v.value, transform: [{ scale: 0.8 + v.value * 0.3 }] }));
+  return <Animated.View style={[{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.textMuted }, style]} />;
+}
+
 export default function ChatScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
+  const navigation = useNavigation();
+  const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [loading, setLoading] = useState(false);
+  const [urgent, setUrgent] = useState(false);
+  const scroller = useRef<ElementRef<typeof ScrollView>>(null);
+  const loaded = useRef(false);
 
-  const handleSend = async (customText?: string) => {
-    const textToSend = customText || input;
-    if (!textToSend.trim() || isLoading) return;
+  // Load saved chat once.
+  useEffect(() => {
+    AsyncStorage.getItem("chat_history")
+      .then((raw) => {
+        if (raw) {
+          const saved = JSON.parse(raw) as Message[];
+          if (Array.isArray(saved) && saved.length) setMessages(saved);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        loaded.current = true;
+      });
+  }, []);
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: textToSend };
-    const updatedMessages = [...messages, userMsg];
-    
-    setMessages(updatedMessages);
+  useEffect(() => {
+    if (!loaded.current) return;
+    AsyncStorage.setItem("chat_history", JSON.stringify(messages.slice(-MAX_KEPT))).catch(() => {});
+  }, [messages]);
+
+  const clearChat = useCallback(() => {
+    Alert.alert("Clear this chat?", "The conversation is deleted from this phone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: () => {
+          setMessages([WELCOME]);
+          setUrgent(false);
+          AsyncStorage.removeItem("chat_history").catch(() => {});
+        },
+      },
+    ]);
+  }, []);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable onPress={clearChat} hitSlop={12} accessibilityRole="button" accessibilityLabel="Clear chat">
+          <Ionicons name="trash-outline" size={21} color={colors.textMuted} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, clearChat, colors]);
+
+  const toEnd = () => setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 80);
+
+  const send = async (custom?: string) => {
+    const text = (custom ?? input).trim();
+    if (!text || loading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+    if (isEmergency(text)) setUrgent(true);
+    const userMsg: Message = { id: `${Date.now()}`, role: "user", content: text };
+    const next = [...messages, userMsg];
+    setMessages(next);
     setInput("");
-    setIsLoading(true);
-    
-    // Auto-scroll to bottom
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    setLoading(true);
+    toEnd();
 
     try {
-      // Send to Supabase Edge Function
-      const res = await fetch("https://gevnakyvjxvnzasruzwh.supabase.co/functions/v1/chat", {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token ?? SUPABASE_ANON_KEY;
+      const res = await fetch(CHAT_ENDPOINT, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdldm5ha3l2anh2bnphc3J1endoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MjE5MzAsImV4cCI6MjEwODM5NzkzMH0.6bYEiX5yEupRDZWJfhI2_VVPYbxJSVErCzTvv1hytfU`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
-        }),
+        headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+        // Only the last few turns go to the AI: cheaper, faster, and less personal data leaves the phone.
+        body: JSON.stringify({ messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })) }),
       });
-
-      const data = await res.json();
-      
-      if (data?.choices?.[0]?.message?.content) {
-        const aiMsg: Message = {
-          id: Date.now().toString() + "-ai",
-          role: "assistant",
-          content: data.choices[0].message.content.trim(),
-        };
-        setMessages(prev => [...prev, aiMsg]);
-      } else {
-        throw new Error("Invalid response from AI");
-      }
-    } catch (error) {
-      const errorMsg: Message = {
-        id: Date.now().toString() + "-err",
-        role: "assistant",
-        content: "Sorry, I'm having trouble connecting right now. Please try again.",
-      };
-      setMessages(prev => [...prev, errorMsg]);
+      if (res.status === 429) throw new Error("You're asking quickly. Please wait a minute and try again.");
+      const json = await res.json();
+      const reply = json?.choices?.[0]?.message?.content?.trim();
+      if (!reply) throw new Error(res.status === 401 ? "Please sign in again to use the chat." : json?.error || "empty");
+      setMessages((p) => [...p, { id: `${Date.now()}-ai`, role: "assistant", content: reply }]);
+    } catch (e: any) {
+      const msg = e?.message && e.message !== "empty" && !/network|fetch|JSON/i.test(e.message) ? e.message : "I couldn't connect just now. Check your internet and try again.";
+      setMessages((p) => [...p, { id: `${Date.now()}-err`, role: "assistant", content: msg }]);
     } finally {
-      setIsLoading(false);
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      setLoading(false);
+      toEnd();
     }
   };
 
-  return (
-    <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={90}>
-        <ScrollView 
-          ref={scrollViewRef}
-          contentContainerStyle={styles.scroll}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-        >
-          {messages.map((msg) => (
-            <View key={msg.id} style={[styles.messageRow, msg.role === "user" ? styles.userRow : styles.aiRow]}>
-              {msg.role === "assistant" && (
-                <View style={styles.aiAvatar}>
-                  <Ionicons name="medical" size={16} color="#FFF" />
-                </View>
-              )}
-              <View style={[styles.bubble, msg.role === "user" ? styles.userBubble : styles.aiBubble]}>
-                <Text style={[styles.messageText, msg.role === "user" ? styles.userText : styles.aiText]}>
-                  {msg.content}
-                </Text>
-              </View>
-            </View>
-          ))}
+  const onlyWelcome = messages.length === 1;
 
-          {isLoading && (
-            <View style={[styles.messageRow, styles.aiRow]}>
-              <View style={styles.aiAvatar}>
-                <Ionicons name="medical" size={16} color="#FFF" />
+  return (
+    <Screen padded={false} edges={["left", "right"]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}>
+        {urgent && (
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.urgent}>
+            <Ionicons name="alert-circle" size={20} color={colors.danger} />
+            <Text style={styles.urgentText}>This may be urgent. Don't wait for a chat reply.</Text>
+            <Pressable onPress={() => router.push("/emergency")} style={styles.urgentBtn} accessibilityRole="button">
+              <Text style={styles.urgentBtnText}>Get help</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        <ScrollView
+          ref={scroller}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}
+          showsVerticalScrollIndicator={false}
+        >
+          {messages.map((m, i) => {
+            const mine = m.role === "user";
+            return (
+              <Animated.View key={m.id} entering={FadeInDown.duration(320)} style={[styles.row, mine ? styles.rowMine : styles.rowTheirs]}>
+                {!mine && (
+                  <Gradient colors={gradients.brand} style={styles.avatar}>
+                    <Ionicons name="medical" size={15} color="#FFFFFF" />
+                  </Gradient>
+                )}
+                {mine ? (
+                  <Gradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.bubble, styles.bubbleMine]}>
+                    <Text style={[styles.text, { color: "#FFFFFF" }]} selectable>{m.content}</Text>
+                  </Gradient>
+                ) : (
+                  <View style={[styles.bubble, styles.bubbleTheirs]}>
+                    <Text style={styles.text} selectable>{m.content}</Text>
+                  </View>
+                )}
+              </Animated.View>
+            );
+          })}
+
+          {loading && (
+            <Animated.View entering={FadeIn} style={[styles.row, styles.rowTheirs]}>
+              <Gradient colors={gradients.brand} style={styles.avatar}>
+                <Ionicons name="medical" size={15} color="#FFFFFF" />
+              </Gradient>
+              <View style={[styles.bubble, styles.bubbleTheirs, styles.typing]}>
+                <Dot delay={0} />
+                <Dot delay={150} />
+                <Dot delay={300} />
               </View>
-              <View style={[styles.bubble, styles.aiBubble, { width: 60, alignItems: "center" }]}>
-                <Text style={{ fontSize: 18, color: colors.textMuted }}>•••</Text>
-              </View>
-            </View>
+            </Animated.View>
+          )}
+
+          {onlyWelcome && !loading && (
+            <Animated.View entering={FadeInDown.delay(250).duration(400)} style={styles.chips}>
+              {SUGGESTIONS.map((s) => (
+                <Pressable key={s} onPress={() => send(s)} style={styles.chip} accessibilityRole="button">
+                  <Text style={styles.chipText}>{s}</Text>
+                </Pressable>
+              ))}
+            </Animated.View>
           )}
         </ScrollView>
 
-        <View style={styles.inputContainer}>
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
           <TextInput
             style={styles.input}
             placeholder="Ask about your teeth..."
             placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accent}
             value={input}
             onChangeText={setInput}
             multiline
+            maxLength={600}
+            onSubmitEditing={() => send()}
           />
-          <Pressable 
-            style={[styles.sendBtn, !input.trim() && { opacity: 0.5 }]} 
-            onPress={() => handleSend()}
-            disabled={!input.trim() || isLoading}
+          <Pressable
+            onPress={() => send()}
+            disabled={!input.trim() || loading}
+            style={[styles.send, (!input.trim() || loading) && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
           >
-            <Ionicons name="arrow-up" size={20} color="#FFF" />
+            <Ionicons name="arrow-up" size={20} color={colors.onAccent} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -137,22 +228,29 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { padding: spacing.md, paddingBottom: spacing.xl },
-  messageRow: { flexDirection: "row", marginBottom: spacing.md, alignItems: "flex-end" },
-  userRow: { justifyContent: "flex-end" },
-  aiRow: { justifyContent: "flex-start" },
-  aiAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", marginRight: spacing.sm, marginBottom: 4 },
-  
-  bubble: { maxWidth: "80%", padding: spacing.md, borderRadius: radius.xl },
-  userBubble: { backgroundColor: colors.accent, borderBottomRightRadius: 4 },
-  aiBubble: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderBottomLeftRadius: 4 },
-  
-  messageText: { fontSize: 15, lineHeight: 22 },
-  userText: { color: "#FFF" },
-  aiText: { color: colors.text },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    list: { padding: spacing.md, paddingBottom: spacing.lg, gap: spacing.sm },
+    row: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
+    rowMine: { justifyContent: "flex-end" },
+    rowTheirs: { justifyContent: "flex-start" },
+    avatar: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 2 },
+    bubble: { maxWidth: "80%", paddingHorizontal: 14, paddingVertical: 10 },
+    bubbleMine: { borderRadius: 20, borderBottomRightRadius: 6 },
+    bubbleTheirs: { borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadows.sm },
+    text: { fontSize: 15.5, lineHeight: 22, color: colors.text },
+    typing: { flexDirection: "row", gap: 5, paddingVertical: 16, paddingHorizontal: 16 },
 
-  inputContainer: { flexDirection: "row", alignItems: "center", padding: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
-  input: { flex: 1, backgroundColor: colors.background, borderRadius: radius.xl, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, fontSize: 15, color: colors.text, maxHeight: 100, minHeight: 44 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", marginLeft: spacing.sm },
-});
+    chips: { gap: spacing.sm, marginTop: spacing.md, alignItems: "flex-start", paddingLeft: 36 },
+    chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.full, backgroundColor: colors.accentMuted },
+    chipText: { fontSize: 13.5, fontWeight: "600", color: colors.accentStrong },
+
+    urgent: { flexDirection: "row", alignItems: "center", gap: spacing.sm, margin: spacing.md, marginBottom: 0, padding: spacing.sm + 2, borderRadius: radius.md, backgroundColor: colors.dangerMuted },
+    urgentText: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.text },
+    urgentBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.danger },
+    urgentBtnText: { fontSize: 12.5, fontWeight: "800", color: colors.onDanger },
+
+    composer: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+    input: { flex: 1, maxHeight: 120, minHeight: 44, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderRadius: 22, backgroundColor: colors.surfaceAlt, fontSize: 15.5, color: colors.text },
+    send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
+  });

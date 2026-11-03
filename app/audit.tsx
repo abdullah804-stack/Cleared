@@ -1,6 +1,8 @@
 // app/audit.tsx
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, Text, View, ScrollView, Pressable, Alert, Platform } from "react-native";
+import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "../components/Screen";
@@ -76,14 +78,19 @@ export default function AuditScreen() {
             </View>
           )}
 
-          {entries.map((entry) => {
+          {entries.map((entry, idx) => {
             const isExpanded = expandedId === entry.id;
             const c = tone(entry.type);
             return (
+              <Animated.View key={entry.id} entering={FadeInDown.delay(Math.min(idx, 8) * 40).duration(350)} layout={LinearTransition}>
               <Pressable
-                key={entry.id}
                 style={({ pressed }) => [styles.row, pressed && { opacity: 0.9 }]}
-                onPress={() => setExpandedId(isExpanded ? null : entry.id)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setExpandedId(isExpanded ? null : entry.id);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isExpanded }}
               >
                 <View style={styles.rowHeader}>
                   <View style={[styles.badge, { backgroundColor: c.bg }]}>
@@ -103,6 +110,7 @@ export default function AuditScreen() {
                   </View>
                 )}
               </Pressable>
+              </Animated.View>
             );
           })}
         </View>
@@ -119,7 +127,7 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     scroll: { flexGrow: 1, paddingBottom: spacing.lg },
     header: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md, marginTop: spacing.sm, marginBottom: spacing.lg },
-    title: { ...type.display, color: colors.text },
+    title: { fontSize: 30, fontWeight: "800", letterSpacing: -0.8, color: colors.text },
     subtitle: { fontSize: 14, lineHeight: 20, color: colors.textMuted, marginTop: spacing.xs },
     clearBtn: {
       flexDirection: "row",

@@ -73,3 +73,16 @@ export async function sendTestNotification(): Promise<boolean> {
   });
   return true;
 }
+
+/** A reminder that repeats every day at hour:minute (local time). Returns its id so it can be cancelled. Null if not allowed. */
+export async function scheduleDaily(title: string, body: string, hour: number, minute: number): Promise<string | null> {
+  if (!(await ensureNotificationPermission())) return null;
+  return Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute, channelId: CHANNEL_ID },
+  });
+}
+
+export async function cancelNotifications(ids: string[]) {
+  await Promise.all(ids.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => {})));
+}
