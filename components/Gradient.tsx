@@ -1,7 +1,7 @@
 // components/Gradient.tsx
 // Gradients drawn with react-native-svg (already in the project), so no new native package is needed.
-import { ReactNode, useId } from "react";
-import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import { ReactNode, useId, useState } from "react";
+import { LayoutChangeEvent, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from "react-native-svg";
 
 type Point = { x: number; y: number };
@@ -20,9 +20,17 @@ export function Gradient({
   children?: ReactNode;
 }) {
   const id = "g" + useId().replace(/[^a-zA-Z0-9]/g, "");
+  // Percent sizes on Android SVG can stay stuck at the first (smaller) width, which painted half-width buttons.
+  // Measuring the real size and drawing in pixels fixes that.
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setBox((b) => (b && Math.abs(b.w - width) < 0.5 && Math.abs(b.h - height) < 0.5 ? b : { w: width, h: height }));
+  };
   return (
-    <View style={[{ overflow: "hidden" }, style]}>
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none" pointerEvents="none">
+    <View style={[{ overflow: "hidden" }, style]} onLayout={onLayout}>
+      {box && (
+      <Svg style={StyleSheet.absoluteFill} width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} pointerEvents="none">
         <Defs>
           <LinearGradient id={id} x1={`${start.x * 100}%`} y1={`${start.y * 100}%`} x2={`${end.x * 100}%`} y2={`${end.y * 100}%`}>
             {colors.map((c, i) => (
@@ -30,8 +38,9 @@ export function Gradient({
             ))}
           </LinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+        <Rect x="0" y="0" width={box.w} height={box.h} fill={`url(#${id})`} />
       </Svg>
+      )}
       {children}
     </View>
   );

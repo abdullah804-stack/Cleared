@@ -1,6 +1,6 @@
 // app/_layout.tsx
 import { ReactNode, useEffect, useState } from "react";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
 import { initAuditDb } from "../shared/audit";
@@ -74,7 +74,7 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="(auth)/login" options={{ headerShown: false, animation: "fade" }} />
-      <Stack.Screen name="index" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="plan" options={titled("Your plan")} />
       <Stack.Screen name="triage" options={titled("Quick questions")} />
       <Stack.Screen name="audit" options={titled("Audit Log")} />
@@ -112,8 +112,10 @@ export default function RootLayout() {
     <AuthProvider>
       <LanguageProvider>
         <GatedApp>
-          <StatusBar style="auto" />
-          <RootLayoutNav />
+          <StatusBar style="light" />
+          <ThemeProvider value={{ ...DarkTheme, colors: { ...DarkTheme.colors, background: "#000000", card: "#000000", border: "#1B2733", primary: "#22D3EE", text: "#F4F8FB" } }}>
+            <RootLayoutNav />
+          </ThemeProvider>
         </GatedApp>
         <SplashHost />
       </LanguageProvider>

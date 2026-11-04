@@ -1,6 +1,6 @@
 // constants/theme.ts
 // "Deep ocean" clinical palette: calm navy surfaces, cyan→teal brand gradient, soft cool shadows.
-import { Platform, useColorScheme, ViewStyle } from "react-native";
+import { Platform, ViewStyle } from "react-native";
 
 export type ThemeColors = {
   background: string;
@@ -44,40 +44,44 @@ export const lightColors: ThemeColors = {
   overlay: "rgba(6, 21, 35, 0.55)",
 };
 
+// True-black "midnight neon" palette: pure black canvas, near-black cards, cyan/teal glow.
 export const darkColors: ThemeColors = {
-  background: "#061523",
-  surface: "#0D2033",
-  surfaceAlt: "#132A40",
-  border: "#1D3750",
-  text: "#EAF3FA",
-  textMuted: "#8FA6BA",
-  accent: "#38BDF8",
-  accentStrong: "#7DD3FC",
-  accentMuted: "rgba(56, 189, 248, 0.14)",
-  success: "#2DD4BF",
-  successMuted: "rgba(45, 212, 191, 0.14)",
+  background: "#000000",
+  surface: "#0B0F14",
+  surfaceAlt: "#121922",
+  border: "#1B2733",
+  text: "#F4F8FB",
+  textMuted: "#8A97A6",
+  accent: "#22D3EE",
+  accentStrong: "#67E8F9",
+  accentMuted: "rgba(34, 211, 238, 0.12)",
+  success: "#34D399",
+  successMuted: "rgba(52, 211, 153, 0.13)",
   danger: "#FB7185",
-  dangerMuted: "rgba(251, 113, 133, 0.14)",
+  dangerMuted: "rgba(251, 113, 133, 0.13)",
   warning: "#FBBF24",
-  warningMuted: "rgba(251, 191, 36, 0.14)",
-  onAccent: "#FFFFFF",
+  warningMuted: "rgba(251, 191, 36, 0.13)",
+  onAccent: "#00161C", // dark text on the bright neon buttons
   onDanger: "#2A0A12",
-  overlay: "rgba(0, 0, 0, 0.65)",
+  overlay: "rgba(0, 0, 0, 0.75)",
 };
 
+/** The app is dark-only by design: a black canvas makes the glow effects pop. */
 export function useThemeColors(): ThemeColors {
-  return useColorScheme() === "dark" ? darkColors : lightColors;
+  return darkColors;
 }
 
 /** Back-compat for files that import a static `colors`. Prefer useThemeColors(). */
-export const colors = lightColors;
+export const colors = darkColors;
 
 /** Fixed brand gradients (same in light and dark). */
 export const gradients = {
   // Buttons, highlights. White text is readable on every stop.
   brand: ["#0369A1", "#0891B2", "#0D9488"] as string[],
   // Hero / splash backgrounds
-  hero: ["#061523", "#0A2A44", "#0C3E63"] as string[],
+  hero: ["#000000", "#04141C", "#073040"] as string[],
+  // Bright neon fill for primary buttons (use DARK text on it)
+  glow: ["#06B6D4", "#22D3EE", "#2DD4BF"] as string[],
   // Lighter surface wash for cards that deserve attention
   soft: ["#E0F2FE", "#D9F5F0"] as string[],
 };

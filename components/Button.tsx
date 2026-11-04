@@ -60,7 +60,7 @@ export function Button({
     <Animated.View
       style={[
         animated,
-        variant === "primary" && !inactive && glow(colors.accent, 0.3),
+        variant === "primary" && !inactive && glow(colors.accent, 0.55),
         variant === "danger" && !inactive && glow(colors.danger, 0.22),
         inactive && { opacity: 0.55 },
         style,
@@ -79,7 +79,7 @@ export function Button({
         }}
       >
         {variant === "primary" ? (
-          <Gradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.base}>
+          <Gradient colors={gradients.glow} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.base}>
             {content}
           </Gradient>
         ) : (

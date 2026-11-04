@@ -6,10 +6,7 @@ import type { PlanStep, StepResult } from "../shared/types";
 import { executeTool } from "../shared/tools";
 import { PlanSchema } from "../shared/schema";
 import { getDefaultCurrency } from "../constants/pricing";
-
-function isEmergency(text?: string): boolean {
-  return /\b(chest pain|can't breathe|cannot breathe|difficulty breathing|shortness of breath|unconscious|not breathing|severe bleeding|stroke|suicid(?:al|e)|overdose)\b/i.test(text ?? "");
-}
+import { isEmergency } from "../constants/emergency";
 
 export type AgentState =
   | { status: "IDLE" }
@@ -153,6 +150,7 @@ function friendlyError(err: any): string {
   if (err?.name === "AbortError") return "The request took too long.";
   if (err?.name === "ZodError") return "The AI returned a plan we couldn't read.";
   const msg = String(err?.message ?? "");
+  if (/JSON Parse error|Unexpected end of input|Unexpected token/i.test(msg)) return "The AI is busy right now. Please try again in a moment.";
   if (/network request failed|failed to fetch|network/i.test(msg)) return "No internet connection.";
   return msg || "Something went wrong.";
 }
@@ -190,9 +188,14 @@ export function useAgent(opts: UseAgentOptions) {
         return;
       }
 
-      const fetchPlan = async () => {
+      // One attempt = ask the server, then read the plan out of the reply.
+      // Free AI models sometimes answer with nothing, half a JSON, or a markdown fence. Those are
+      // temporary, so we retry quietly instead of showing "JSON Parse error" to the user.
+      class Retryable extends Error {}
+
+      const attempt = async () => {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 45000);
+        const timer = setTimeout(() => controller.abort(), 40000);
         try {
           const res = await fetch(optsRef.current.planEndpoint, {
             method: "POST",
@@ -200,23 +203,54 @@ export function useAgent(opts: UseAgentOptions) {
             body: JSON.stringify({ input, currency: getDefaultCurrency().code }),
             signal: controller.signal,
           });
-          if (!res.ok) throw new Error(`Server error (${res.status})`);
-          return await res.json();
+          const text = await res.text();
+          let body: any = null;
+          try {
+            body = text.trim() ? JSON.parse(text) : null;
+          } catch {}
+
+          if (!res.ok) {
+            const msg = body?.error ? String(body.error) : `Server error (${res.status})`;
+            if (res.status >= 500) throw new Retryable(msg);
+            throw new Error(msg); // 4xx (too long, bad request): retrying won't help
+          }
+
+          const content: string | undefined = body?.choices?.[0]?.message?.content;
+          if (!content || !content.trim()) throw new Retryable("The AI sent an empty reply.");
+
+          const first = content.indexOf("{");
+          const last = content.lastIndexOf("}");
+          if (first === -1 || last <= first) throw new Retryable("The AI didn't return a plan.");
+
+          let json: any;
+          try {
+            json = JSON.parse(content.substring(first, last + 1));
+          } catch {
+            throw new Retryable("The AI sent a broken plan.");
+          }
+          const checked = PlanSchema.safeParse(json);
+          if (!checked.success) throw new Retryable("The AI returned a plan we couldn't read.");
+          return { parsed: checked.data, body };
         } finally {
           clearTimeout(timer);
         }
       };
 
       try {
-        let body: any = await fetchPlan();
-        if (!body?.choices?.[0]?.message?.content) body = await fetchPlan();
-
-        const content: string = body.choices[0].message.content;
-        const firstBrace = content.indexOf("{");
-        const lastBrace = content.lastIndexOf("}");
-        if (firstBrace === -1 || lastBrace === -1) throw new Error("The AI didn't return a plan.");
-
-        const parsed = PlanSchema.parse(JSON.parse(content.substring(firstBrace, lastBrace + 1)));
+        let result: Awaited<ReturnType<typeof attempt>> | null = null;
+        let lastErr: any = null;
+        for (let i = 0; i < 3 && !result; i++) {
+          try {
+            result = await attempt();
+          } catch (e: any) {
+            lastErr = e;
+            const retryable = e instanceof Retryable || e?.name === "AbortError" || /network request failed|failed to fetch/i.test(String(e?.message));
+            if (!retryable || i === 2) break;
+            await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+          }
+        }
+        if (!result) throw lastErr ?? new Error("Something went wrong.");
+        const { parsed, body } = result;
 
         // The AI thinks in dollars ("budget 150"). On a PKR phone that would read "Rs 150",
         // so convert dollar-sized budgets to a rough rupee amount (rounded to the nearest 500).

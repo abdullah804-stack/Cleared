@@ -10,11 +10,13 @@
       "android"
     ],
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0A2A44",
-        "foregroundImage": "./assets/images/icon.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.ai_abdullah2026.cleared"
@@ -24,13 +26,12 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#061523",
-          "image": "./assets/images/icon.png",
-          "imageWidth": 200,
+          "backgroundColor": "#000000",
+          "image": "./assets/images/splash-blank.png",
+          "imageWidth": 120,
           "resizeMode": "contain",
           "dark": {
-            "backgroundColor": "#061523",
-            "image": "./assets/images/icon.png"
+            "backgroundColor": "#000000"
           }
         }
       ],
@@ -46,6 +47,19 @@
       "expo-notifications",
       "@react-native-community/datetimepicker",
       "expo-web-browser",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Cleared to add your dental appointments to your calendar."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Cleared to pick photos of your teeth for your progress gallery.",
+          "cameraPermission": "Allow Cleared to take photos of your teeth for your progress gallery."
+        }
+      ],
       "expo-build-properties"
     ],
     "experiments": {

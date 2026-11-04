@@ -43,6 +43,9 @@ export function Card({
     backgroundColor: colors.surface,
     borderColor: colors.border,
     ...shadows.sm,
+    shadowColor: colors.accent, // a faint cyan halo on the black canvas
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
   };
 
   if (!onPress) {

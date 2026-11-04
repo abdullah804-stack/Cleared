@@ -55,7 +55,7 @@ Return shape (exactly this):
 
 async function callModel(input: string, currency: string, withJsonMode: boolean) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
+  const timer = setTimeout(() => controller.abort(), 25000);
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -68,7 +68,7 @@ async function callModel(input: string, currency: string, withJsonMode: boolean)
           { role: "user", content: input },
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 3000,
         // Some free models reject this flag, so we retry without it below.
         ...(withJsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
@@ -97,10 +97,17 @@ serve(async (req) => {
   const currency = body.currency === "PKR" ? "PKR" : "USD";
 
   try {
-    let { res, data } = await callModel(input, currency, true);
-    if (!res.ok && res.status === 400) ({ res, data } = await callModel(input, currency, false));
+    // Free models sometimes return an empty message. Try up to 3 times before giving up.
+    const hasContent = (d: any) => typeof d?.choices?.[0]?.message?.content === "string" && d.choices[0].message.content.includes("{");
+    let res: Response, data: any;
+    for (let i = 0; i < 3; i++) {
+      ({ res, data } = await callModel(input, currency, i === 0));
+      if (!res.ok && res.status === 400 && i === 0) continue; // this model rejects JSON mode, retry without it
+      if (res.ok && hasContent(data)) break;
+    }
 
-    if (!res.ok) return json({ error: "OpenRouter request failed", status: res.status, detail: data }, 502);
+    if (res!.ok && !hasContent(data)) return json({ error: "The AI sent an empty reply" }, 502);
+    if (!res!.ok) return json({ error: "OpenRouter request failed", status: res!.status }, 502);
 
     // currency_applied lets the app know the budget is already in the right currency.
     return json({ ...data, currency_applied: currency });
