@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Gradient } from "./Gradient";
 import { useThemeColors, radius, spacing, glow, gradients, motion } from "../constants/theme";
 
-type Variant = "primary" | "soft" | "ghost" | "danger";
+type Variant = "primary" | "soft" | "ghost" | "danger" | "dangerGhost";
 
 export function Button({
   title,
@@ -34,7 +34,7 @@ export function Button({
   const inactive = disabled || loading;
 
   const textColor =
-    variant === "primary" ? colors.onAccent : variant === "danger" ? colors.onDanger : variant === "soft" ? colors.accentStrong : colors.text;
+    variant === "primary" ? colors.onAccent : variant === "danger" ? colors.onDanger : variant === "dangerGhost" ? colors.danger : variant === "soft" ? colors.accentStrong : colors.text;
 
   const content: ReactNode = loading ? (
     <ActivityIndicator color={textColor} />
@@ -50,6 +50,8 @@ export function Button({
   const surface: ViewStyle =
     variant === "danger"
       ? { backgroundColor: colors.danger }
+      : variant === "dangerGhost"
+        ? { backgroundColor: colors.dangerMuted, borderWidth: 1.5, borderColor: `${colors.danger}66` }
       : variant === "soft"
         ? { backgroundColor: colors.accentMuted }
         : variant === "ghost"

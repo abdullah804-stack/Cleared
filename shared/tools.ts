@@ -189,12 +189,13 @@ export async function executeTool(
 
         if (userId) {
           // The result used to be ignored, so a failed save still showed "Booked Successfully".
-          const { error } = await supabase.from("appointments").insert({
-            user_id: userId,
-            user_email: userEmail || null,
-            clinic_name: clinic.name,
-            appointment_time: when.toISOString(),
-          });
+          const row = { user_id: userId, user_email: userEmail || null, clinic_name: clinic.name, appointment_time: when.toISOString() };
+          let { error } = await supabase.from("appointments").insert(row);
+          // Right after a database change, Supabase can briefly answer "schema cache" errors. Wait a moment and try again.
+          for (let i = 0; error && /schema cache|PGRST20[0-9]/i.test(`${error.code ?? ""} ${error.message}`) && i < 2; i++) {
+            await new Promise((r) => setTimeout(r, 1500));
+            ({ error } = await supabase.from("appointments").insert(row));
+          }
           if (error) return { ok: false, error: `Couldn't save your booking (${error.message}).` };
         }
 

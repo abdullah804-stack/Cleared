@@ -23,7 +23,7 @@ export const HELP_TOOLS: Tool[] = [
   { title: "Ask Cleared", sub: "Questions about your care", icon: "chatbubbles", tint: "#22D3EE", path: "/chat" },
   { title: "Case Card", sub: "Share your case with a clinic", icon: "id-card", tint: "#2DD4BF", path: "/case-card" },
   { title: "Dental Profile", sub: "Allergies, medicines, history", icon: "medkit", tint: "#818CF8", path: "/dental-profile" },
-  { title: "Family", sub: "Care for your loved ones", icon: "people-circle", tint: "#F472B6", path: "/family-profiles" },
+  { title: "Find a Dentist", sub: "Describe it and get a plan", icon: "search", tint: "#F472B6", path: "/triage" },
 ];
 
 export const MORE_TOOLS: Tool[] = [
@@ -59,4 +59,20 @@ export const TIPS = [
   { icon: "ban" as IconName, tint: "#FB7185", title: "Never put aspirin on a gum", text: "An old myth. It burns the gum tissue and does not stop the pain. See a dentist instead." },
   { icon: "alert-circle" as IconName, tint: "#F97316", title: "Don't wait on swelling", text: "Pain that wakes you at night, a swollen face or a fever needs a dentist the same day." },
   { icon: "calendar" as IconName, tint: "#34D399", title: "Check-up every six months", text: "Cavities are cheap and painless to fix when small. A regular check catches them early." },
+];
+
+/** Short one-liners for the drifting advice strip on Home. */
+export const ADVICE = [
+  { icon: "time" as IconName, tint: "#22D3EE", text: "Don't brush right after acidic drinks. Wait 30 minutes so enamel can harden again." },
+  { icon: "color-fill" as IconName, tint: "#2DD4BF", text: "A pea-sized dab of fluoride toothpaste is enough for adults. Use a rice-grain for toddlers." },
+  { icon: "alert-circle" as IconName, tint: "#FB7185", text: "Bleeding gums usually mean plaque. Brush gently, floss daily, and see a dentist if it lasts." },
+  { icon: "snow" as IconName, tint: "#60A5FA", text: "Don't chew ice or open bottles with your teeth. Cracked enamel can't heal." },
+  { icon: "happy" as IconName, tint: "#A78BFA", text: "Clean your tongue too. Most bad breath starts there, not on the teeth." },
+  { icon: "cafe" as IconName, tint: "#FBBF24", text: "Sugary chai is fine with meals. Sipping it all day is what causes cavities." },
+  { icon: "flash" as IconName, tint: "#F97316", text: "A knocked-out adult tooth can often be saved if you reach a dentist within 30 minutes." },
+  { icon: "people" as IconName, tint: "#34D399", text: "Start brushing your child's teeth the moment the first tooth appears." },
+  { icon: "warning" as IconName, tint: "#FB7185", text: "Wisdom tooth pain with swelling and a bad taste is often infection. Don't wait." },
+  { icon: "water" as IconName, tint: "#22D3EE", text: "Mouthwash helps, but it never replaces brushing and flossing." },
+  { icon: "thermometer" as IconName, tint: "#FBBF24", text: "Sensitive teeth? Try desensitising toothpaste and a soft brush. If it lasts weeks, get it checked." },
+  { icon: "ban" as IconName, tint: "#F97316", text: "Paan, gutka and smoking stain teeth and raise the risk of gum disease and mouth cancer." },
 ];

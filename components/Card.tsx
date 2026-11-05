@@ -39,13 +39,17 @@ export function Card({
   const scale = useSharedValue(1);
   const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
+  const bg = (StyleSheet.flatten(style) as any)?.backgroundColor;
+  const isTransparent = typeof bg === "string" && (/^rgba/i.test(bg) || /^#[0-9a-f]{8}$/i.test(bg));
+
   const surface: ViewStyle = {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     ...shadows.sm,
     shadowColor: colors.accent, // a faint cyan halo on the black canvas
-    shadowOpacity: 0.12,
+    shadowOpacity: isTransparent ? 0 : 0.12,
     shadowRadius: 12,
+    ...(isTransparent ? { elevation: 0 } : {}),
   };
 
   if (!onPress) {

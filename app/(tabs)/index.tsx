@@ -14,7 +14,8 @@ import { Gradient, RadialGlow } from "../../components/Gradient";
 import { TodayCard } from "../../components/TodayCard";
 import { VideoRail } from "../../components/VideoRail";
 import { HomeChat } from "../../components/HomeChat";
-import { TAB_BAR_HEIGHT } from "../../components/TabBar";
+import { Marquee } from "../../components/Marquee";
+import { AdviceMarquee } from "../../components/AdviceMarquee";
 import { useThemeColors, ThemeColors, glow, gradients, motion, radius, spacing, type } from "../../constants/theme";
 import { QUICK_ACTIONS } from "../../constants/tools";
 import { useIdentity } from "../../hooks/useIdentity";
@@ -30,9 +31,14 @@ try {
 const PROBLEM_CHIPS: { label: string; icon: keyof typeof Ionicons.glyphMap; tint: string }[] = [
   { label: "Toothache", icon: "thermometer", tint: "#FB7185" },
   { label: "Swelling", icon: "body", tint: "#FBBF24" },
-  { label: "Broken Tooth", icon: "construct", tint: "#A78BFA" },
+  { label: "Broken tooth", icon: "construct", tint: "#A78BFA" },
+  { label: "Bleeding gums", icon: "water", tint: "#F87171" },
+  { label: "Sensitivity", icon: "snow", tint: "#60A5FA" },
   { label: "Cleaning", icon: "sparkles", tint: "#22D3EE" },
-  { label: "Kids", icon: "happy", tint: "#2DD4BF" },
+  { label: "Bad breath", icon: "leaf", tint: "#34D399" },
+  { label: "Wisdom tooth", icon: "alert-circle", tint: "#F97316" },
+  { label: "Braces", icon: "git-compare", tint: "#2DD4BF" },
+  { label: "Kids", icon: "happy", tint: "#F472B6" },
 ];
 
 function greeting() {
@@ -120,7 +126,7 @@ export default function HomeScreen() {
       <StatusBar style="light" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
-          contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + insets.bottom + spacing.xl }}
+          contentContainerStyle={{ paddingBottom: spacing.xl }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
@@ -155,14 +161,24 @@ export default function HomeScreen() {
             </Animated.View>
           </Gradient>
 
+          {/* ── Dentist's tips ─────────────────────── */}
+          <Animated.View entering={enter(2)} style={{ marginTop: spacing.lg }}>
+            <Card style={{ marginHorizontal: spacing.md }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: colors.text }}>Dentist's tip</Text>
+              <Text style={{ fontSize: 14, lineHeight: 21, color: colors.textMuted, marginTop: spacing.xs }}>
+                Brush gently twice a day and clean between your teeth daily.
+              </Text>
+            </Card>
+          </Animated.View>
+
           {/* ── Streak ─────────────────────────────── */}
-          <Animated.View entering={enter(2)} style={{ paddingHorizontal: spacing.md, marginTop: spacing.lg }}>
+          <Animated.View entering={enter(3)} style={{ paddingHorizontal: spacing.md, marginTop: spacing.lg }}>
             <TodayCard />
           </Animated.View>
 
           {/* ── AI plan ────────────────────────────── */}
           <SectionTitle title="Get a care plan" hint="AI plans, you approve" colors={colors} />
-          <Animated.View entering={enter(3)} style={{ paddingHorizontal: spacing.md }}>
+          <Animated.View entering={enter(4)} style={{ paddingHorizontal: spacing.md }}>
             <Card padded={false} style={[styles.askCard, glow(colors.accent, 0.18)]}>
               <Text style={styles.askTitle}>What's bothering you?</Text>
               <Text style={styles.askSub}>Describe it in your own words. English or Urdu.</Text>
@@ -189,26 +205,34 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.chips}>
-                {PROBLEM_CHIPS.map((chip) => (
-                  <Pressable key={chip.label} onPress={() => handlePlan(chip.label)} style={[styles.chip, { borderColor: `${chip.tint}55` }]} accessibilityRole="button">
-                    <Ionicons name={chip.icon} size={15} color={chip.tint} />
-                    <Text style={styles.chipText}>{chip.label}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+              <View style={styles.chips}>
+                <Marquee speed={24} gap={spacing.sm}>
+                  {PROBLEM_CHIPS.map((chip) => (
+                    <Pressable key={chip.label} onPress={() => handlePlan(chip.label)} style={[styles.chip, { borderColor: `${chip.tint}55` }]} accessibilityRole="button" accessibilityLabel={`Start a plan for ${chip.label}`}>
+                      <Ionicons name={chip.icon} size={15} color={chip.tint} />
+                      <Text style={styles.chipText}>{chip.label}</Text>
+                    </Pressable>
+                  ))}
+                </Marquee>
+              </View>
             </Card>
+          </Animated.View>
+
+          {/* ── Advice ─────────────────────────────── */}
+          <SectionTitle title="Dentist advice" hint="Quick tips" colors={colors} />
+          <Animated.View entering={enter(5)}>
+            <AdviceMarquee />
           </Animated.View>
 
           {/* ── Videos ─────────────────────────────── */}
           <SectionTitle title="Watch and learn" hint="Opens in YouTube" colors={colors} />
-          <Animated.View entering={enter(4)}>
+          <Animated.View entering={enter(6)}>
             <VideoRail />
           </Animated.View>
 
           {/* ── Chat ───────────────────────────────── */}
           <SectionTitle title="Ask a question" colors={colors} />
-          <Animated.View entering={enter(5)} style={{ paddingHorizontal: spacing.md }}>
+          <Animated.View entering={enter(7)} style={{ paddingHorizontal: spacing.md }}>
             <HomeChat />
           </Animated.View>
 
@@ -240,7 +264,7 @@ const createStyles = (colors: ThemeColors) =>
     inputBox: { borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
     input: { fontSize: 16, lineHeight: 23, color: colors.text, minHeight: 72, padding: 0 },
     askFooter: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, marginTop: spacing.md },
-    chips: { gap: spacing.sm, paddingTop: spacing.md },
+    chips: { paddingTop: spacing.md, marginHorizontal: -(spacing.md + 2), overflow: "hidden" },
     chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, paddingVertical: 9, borderRadius: radius.full, borderWidth: 1, backgroundColor: colors.surfaceAlt },
     chipText: { fontSize: 13.5, fontWeight: "600", color: colors.text },
 

@@ -1,9 +1,8 @@
 // app/chat.tsx
 // AI dental assistant. Chat history is kept on the phone only. Calls the Supabase `chat` function with the user's own session token.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ElementRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useNavigation, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeIn, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -43,11 +42,13 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
+  const { q } = useLocalSearchParams<{ q?: string }>();
+  const sentQ = useRef(false);
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [urgent, setUrgent] = useState(false);
-  const scroller = useRef<ElementRef<typeof ScrollView>>(null);
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
   const loaded = useRef(false);
 
   // Load saved chat once.
@@ -133,6 +134,17 @@ export default function ChatScreen() {
     }
   };
 
+  // A question typed on the home screen is sent as soon as the saved chat has loaded.
+  useEffect(() => {
+    if (!q || sentQ.current) return;
+    const t = setTimeout(() => {
+      if (sentQ.current) return;
+      sentQ.current = true;
+      send(String(q));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [q]);
+
   const onlyWelcome = messages.length === 1;
 
   return (
@@ -176,6 +188,15 @@ export default function ChatScreen() {
               </Animated.View>
             );
           })}
+
+          {!loading && messages.length > 2 && messages[messages.length - 1].role === "assistant" && !messages[messages.length - 1].id.endsWith("-err") && (
+            <Animated.View entering={FadeIn.duration(300)} style={{ paddingLeft: 36 }}>
+              <Pressable onPress={() => send("Please explain that in more detail.")} style={styles.more} accessibilityRole="button">
+                <Ionicons name="add-circle-outline" size={15} color={colors.accentStrong} />
+                <Text style={styles.chipText}>Tell me more</Text>
+              </Pressable>
+            </Animated.View>
+          )}
 
           {loading && (
             <Animated.View entering={FadeIn} style={[styles.row, styles.rowTheirs]}>
@@ -241,6 +262,7 @@ const createStyles = (colors: ThemeColors) =>
     text: { fontSize: 15.5, lineHeight: 22, color: colors.text },
     typing: { flexDirection: "row", gap: 5, paddingVertical: 16, paddingHorizontal: 16 },
 
+    more: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.accentMuted, borderWidth: 1, borderColor: "rgba(34,211,238,0.35)" },
     chips: { gap: spacing.sm, marginTop: spacing.md, alignItems: "flex-start", paddingLeft: 36 },
     chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.full, backgroundColor: colors.accentMuted },
     chipText: { fontSize: 13.5, fontWeight: "600", color: colors.accentStrong },

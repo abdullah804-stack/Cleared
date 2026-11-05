@@ -527,20 +527,21 @@ export default function PlanScreen() {
           )}
           {state.status === "EXECUTING" && <Button title="Running…" loading onPress={() => {}} />}
           {state.status === "STEP_FAILED" && (
-            <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: spacing.sm + 2 }}>
+              <Text style={styles.failHint}>This step didn't finish. Retrying usually fixes it.</Text>
+              <Button title="Retry step" icon="refresh" onPress={retry} />
               <View style={styles.row}>
+                <Button title="Skip step" variant="ghost" onPress={skip} style={{ flex: 1 }} />
                 <Button
-                  title="Abort"
-                  variant="danger"
+                  title="Abort plan"
+                  variant="dangerGhost"
                   onPress={() => {
                     abort();
                     router.back();
                   }}
                   style={{ flex: 1 }}
                 />
-                <Button title="Retry step" icon="refresh" onPress={retry} style={{ flex: 1 }} />
               </View>
-              <Button title="Skip and continue" variant="ghost" onPress={skip} />
             </View>
           )}
         </Animated.View>
@@ -675,10 +676,11 @@ const createStyles = (colors: ThemeColors) =>
       borderTopLeftRadius: radius.xl,
       borderTopRightRadius: radius.xl,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
+      borderTopColor: "rgba(34,211,238,0.25)",
       ...shadows.lg,
     },
     row: { flexDirection: "row", gap: spacing.md },
+    failHint: { fontSize: 13, color: colors.textMuted, textAlign: "center" },
 
     modalBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: "center", padding: spacing.lg },
     modalCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, ...shadows.lg },

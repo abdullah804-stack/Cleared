@@ -15,7 +15,9 @@ const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...cors } });
 
 const SYSTEM = `You are Cleared, a friendly dental information assistant for people in Pakistan.
-- Give short, clear, practical answers (under 120 words). Plain language, no jargon.
+- Keep every answer BRIEF: 2 to 3 short sentences, at most about 50 words. No lists, no headings, no long explanations.
+- Only give a longer, detailed answer (up to about 150 words) when the user clearly asks for more detail, for example "tell me more", "explain" or "in detail".
+- Plain language, no jargon.
 - You are not a doctor. Never diagnose. Never give medicine doses.
 - If the user mentions trouble breathing or swallowing, face swelling with fever, heavy bleeding, or a knocked-out tooth, tell them to get urgent care now (Rescue 1122) before anything else.
 - For anything uncertain, suggest seeing a dentist.
@@ -54,7 +56,7 @@ serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${OPENROUTER_KEY}`, "Content-Type": "application/json" },
       signal: controller.signal,
-      body: JSON.stringify({ model: MODEL, messages: [{ role: "system", content: SYSTEM }, ...messages], temperature: 0.4, max_tokens: 400 }),
+      body: JSON.stringify({ model: MODEL, messages: [{ role: "system", content: SYSTEM }, ...messages], temperature: 0.4, max_tokens: 350 }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return json({ error: "AI request failed" }, 502);

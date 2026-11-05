@@ -7,7 +7,7 @@ import { TabPage, ToolRow } from "../../components/TabPage";
 import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { HELP_TOOLS } from "../../constants/tools";
-import { useThemeColors, ThemeColors, glow, radius, spacing } from "../../constants/theme";
+import { useThemeColors, ThemeColors, spacing } from "../../constants/theme";
 
 export default function HelpTab() {
   const colors = useThemeColors();
@@ -16,7 +16,7 @@ export default function HelpTab() {
   return (
     <TabPage title="Get help" subtitle="Urgent steps, questions and your case file." icon="medkit" tint="#22D3EE">
       <Animated.View entering={FadeInDown.delay(60).duration(400)} style={{ marginBottom: spacing.md }}>
-        <Card style={[styles.urgent, glow(colors.danger, 0.3)]}>
+        <Card style={styles.urgent}>
           <View style={styles.urgentHead}>
             <View style={styles.urgentIcon}>
               <Ionicons name="alert-circle" size={26} color={colors.danger} />
@@ -38,9 +38,10 @@ export default function HelpTab() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    urgent: { backgroundColor: colors.dangerMuted, borderColor: `${colors.danger}55` },
+    // Opaque on purpose: a see-through card with a shadow shows a dark box behind it on Android.
+    urgent: { backgroundColor: "#170A0F", borderColor: `${colors.danger}66`, shadowOpacity: 0, elevation: 0, padding: spacing.lg },
     urgentHead: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-    urgentIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+    urgentIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerMuted, borderWidth: 1, borderColor: `${colors.danger}55` },
     urgentTitle: { fontSize: 17, fontWeight: "800", color: colors.danger },
     urgentSub: { fontSize: 13, lineHeight: 18, color: colors.text, opacity: 0.8, marginTop: 2 },
   });

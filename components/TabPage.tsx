@@ -70,7 +70,7 @@ export function TabPage({ title, subtitle, icon, tint, children, fab = true }: {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: barH + 90 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 96 }} showsVerticalScrollIndicator={false}>
         <Gradient colors={gradients.hero} style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
           <RadialGlow color={accent} size={300} opacity={0.35} style={{ position: "absolute", top: -140, right: -90 }} />
           <Animated.View entering={FadeInDown.duration(420)} style={styles.headRow}>
@@ -85,7 +85,7 @@ export function TabPage({ title, subtitle, icon, tint, children, fab = true }: {
         </Gradient>
         <View style={styles.body}>{children}</View>
       </ScrollView>
-      {fab && <ChatFab bottom={barH + spacing.md} />}
+      {fab && <ChatFab bottom={spacing.md} />}
     </View>
   );
 }
