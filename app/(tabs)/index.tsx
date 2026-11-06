@@ -1,3 +1,4 @@
+export { ErrorBoundary } from "expo-router";
 // app/(tabs)/index.tsx  (Home)
 import { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -14,7 +15,6 @@ import { Gradient, RadialGlow } from "../../components/Gradient";
 import { TodayCard } from "../../components/TodayCard";
 import { VideoRail } from "../../components/VideoRail";
 import { HomeChat } from "../../components/HomeChat";
-import { Marquee } from "../../components/Marquee";
 import { AdviceMarquee } from "../../components/AdviceMarquee";
 import { useThemeColors, ThemeColors, glow, gradients, motion, radius, spacing, type } from "../../constants/theme";
 import { QUICK_ACTIONS } from "../../constants/tools";
@@ -161,16 +161,6 @@ export default function HomeScreen() {
             </Animated.View>
           </Gradient>
 
-          {/* ── Dentist's tips ─────────────────────── */}
-          <Animated.View entering={enter(2)} style={{ marginTop: spacing.lg }}>
-            <Card style={{ marginHorizontal: spacing.md }}>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: colors.text }}>Dentist's tip</Text>
-              <Text style={{ fontSize: 14, lineHeight: 21, color: colors.textMuted, marginTop: spacing.xs }}>
-                Brush gently twice a day and clean between your teeth daily.
-              </Text>
-            </Card>
-          </Animated.View>
-
           {/* ── Streak ─────────────────────────────── */}
           <Animated.View entering={enter(3)} style={{ paddingHorizontal: spacing.md, marginTop: spacing.lg }}>
             <TodayCard />
@@ -206,14 +196,12 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.chips}>
-                <Marquee speed={24} gap={spacing.sm}>
-                  {PROBLEM_CHIPS.map((chip) => (
+                  {PROBLEM_CHIPS.slice(0, 6).map((chip) => (
                     <Pressable key={chip.label} onPress={() => handlePlan(chip.label)} style={[styles.chip, { borderColor: `${chip.tint}55` }]} accessibilityRole="button" accessibilityLabel={`Start a plan for ${chip.label}`}>
                       <Ionicons name={chip.icon} size={15} color={chip.tint} />
                       <Text style={styles.chipText}>{chip.label}</Text>
                     </Pressable>
                   ))}
-                </Marquee>
               </View>
             </Card>
           </Animated.View>
@@ -264,7 +252,7 @@ const createStyles = (colors: ThemeColors) =>
     inputBox: { borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
     input: { fontSize: 16, lineHeight: 23, color: colors.text, minHeight: 72, padding: 0 },
     askFooter: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, marginTop: spacing.md },
-    chips: { paddingTop: spacing.md, marginHorizontal: -(spacing.md + 2), overflow: "hidden" },
+    chips: { paddingTop: spacing.md, flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, paddingVertical: 9, borderRadius: radius.full, borderWidth: 1, backgroundColor: colors.surfaceAlt },
     chipText: { fontSize: 13.5, fontWeight: "600", color: colors.text },
 

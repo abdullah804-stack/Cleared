@@ -1,3 +1,4 @@
+export { ErrorBoundary } from "expo-router";
 import { TabPage, ToolRow } from "../../components/TabPage";
 import { CARE_TOOLS } from "../../constants/tools";
 

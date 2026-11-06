@@ -1,8 +1,6 @@
 // components/TabBar.tsx
 // Black bar with rounded glowing top, a glowing pill behind the active tab, and a raised Home button.
-import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,14 +9,11 @@ import { useThemeColors, glow, gradients } from "../constants/theme";
 
 export const TAB_BAR_HEIGHT = 70;
 
-type BottomTabBarProps = {
-  state: {
-    routes: { key: string; name: string }[];
-    index: number;
-  };
+type TabBarProps = {
+  state: { routes: Array<{ name: string; key: string }>; index: number };
   navigation: {
-    emit: (event: { type: "tabPress"; target: string; canPreventDefault: true }) => { defaultPrevented?: boolean };
-    navigate: (name: never) => void;
+    emit: (event: { type: "tabPress"; target: string; canPreventDefault: true }) => { defaultPrevented: boolean };
+    navigate: (name: string) => void;
   };
 };
 
@@ -34,29 +29,20 @@ const META: Record<string, { label: string; off: IconName; on: IconName }> = {
 function Item({ name, focused, onPress }: { name: string; focused: boolean; onPress: () => void }) {
   const colors = useThemeColors();
   const meta = META[name];
-  const on = useSharedValue(focused ? 1 : 0);
-  useEffect(() => {
-    on.value = withSpring(focused ? 1 : 0, { damping: 14, stiffness: 180 });
-  }, [focused]);
-
-  const pill = useAnimatedStyle(() => ({ opacity: on.value, transform: [{ scaleX: interpolate(on.value, [0, 1], [0.5, 1]) }] }));
-  const icon = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(on.value, [0, 1], [1, 1.12]) }, { translateY: interpolate(on.value, [0, 1], [0, -1]) }] }));
-  const home = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(on.value, [0, 1], [1, 1.06]) }] }));
+  const labelStyle = [styles.label, { color: focused ? colors.accentStrong : colors.textMuted, fontWeight: (focused ? "800" : "600") as "800" | "600" }];
 
   if (name === "index") {
     return (
       <Pressable onPress={onPress} style={styles.item} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel="Home">
-        <Animated.View style={home}>
-          <Gradient
-            colors={focused ? gradients.glow : ["#0B2A33", "#071A20"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.home, { borderColor: focused ? "#A5F3FC" : "rgba(34,211,238,0.35)" }, glow(colors.accent, focused ? 0.9 : 0.35)]}
-          >
-            <Ionicons name={focused ? meta.on : meta.off} size={27} color={focused ? colors.onAccent : colors.accentStrong} />
-          </Gradient>
-        </Animated.View>
-        <Text style={[styles.label, { color: focused ? colors.accentStrong : colors.textMuted, fontWeight: focused ? "800" : "600" }]}>{meta.label}</Text>
+        <Gradient
+          colors={focused ? gradients.glow : ["#0B2A33", "#071A20"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.home, { borderColor: focused ? "#A5F3FC" : "rgba(34,211,238,0.35)" }, glow(colors.accent, focused ? 0.9 : 0.35)]}
+        >
+          <Ionicons name={focused ? meta.on : meta.off} size={27} color={focused ? colors.onAccent : colors.accentStrong} />
+        </Gradient>
+        <Text style={labelStyle}>{meta.label}</Text>
       </Pressable>
     );
   }
@@ -64,24 +50,22 @@ function Item({ name, focused, onPress }: { name: string; focused: boolean; onPr
   return (
     <Pressable onPress={onPress} style={styles.item} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={meta.label}>
       <View style={styles.iconBox}>
-        <Animated.View style={[styles.pill, { backgroundColor: colors.accentMuted, borderColor: "rgba(34,211,238,0.45)" }, glow(colors.accent, 0.35), pill]} />
-        <Animated.View style={icon}>
-          <Ionicons name={focused ? meta.on : meta.off} size={22} color={focused ? colors.accentStrong : colors.textMuted} />
-        </Animated.View>
+        {focused && <View style={[styles.pill, { backgroundColor: colors.accentMuted, borderColor: "rgba(34,211,238,0.45)" }, glow(colors.accent, 0.35)]} />}
+        <Ionicons name={focused ? meta.on : meta.off} size={22} color={focused ? colors.accentStrong : colors.textMuted} />
       </View>
-      <Text style={[styles.label, { color: focused ? colors.accentStrong : colors.textMuted, fontWeight: focused ? "800" : "600" }]}>{meta.label}</Text>
+      <Text style={labelStyle}>{meta.label}</Text>
     </Pressable>
   );
 }
 
-export function TabBar({ state, navigation }: BottomTabBarProps) {
+export function TabBar({ state, navigation }: TabBarProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.bar, { borderColor: "rgba(34,211,238,0.22)", height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
       <Gradient colors={["rgba(34,211,238,0.10)", "rgba(0,0,0,0)"]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={styles.topGlow} />
-      {state.routes.map((route: BottomTabBarProps["state"]["routes"][number], i: number) => {
+      {state.routes.map((route, i) => {
         if (!META[route.name]) return null;
         const focused = state.index === i;
         const onPress = () => {

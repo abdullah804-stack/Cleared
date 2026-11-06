@@ -1,9 +1,9 @@
+export { ErrorBoundary } from "expo-router";
 // app/(tabs)/more.tsx
 // Extras that don't belong in the other tabs: family, modes, preferences, privacy and account.
 import { ReactNode, useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,7 +40,7 @@ export default function MoreTab() {
     ]);
 
   const group = (title: string, rows: Row[], delay: number): ReactNode => (
-    <Animated.View entering={FadeInDown.delay(delay).duration(380)}>
+    <View>
       <Text style={styles.section}>{title}</Text>
       <View style={styles.group}>
         {rows.map((r, i) => (
@@ -65,12 +65,12 @@ export default function MoreTab() {
           </Pressable>
         ))}
       </View>
-    </Animated.View>
+    </View>
   );
 
   return (
     <TabPage title="More" subtitle="Family, modes, preferences and privacy." icon="apps" tint="#818CF8">
-      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+      <View>
         <Card onPress={go("/settings")} style={[styles.profile, glow(colors.accent, 0.18)]} accessibilityLabel="Open your profile and settings">
           <Avatar id={avatarId} size={58} ring />
           <View style={{ flex: 1 }}>
@@ -80,7 +80,7 @@ export default function MoreTab() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Card>
-      </Animated.View>
+      </View>
 
       {group("Family and kids", [
         { icon: "people-circle", tint: "#F472B6", title: "Family profiles", sub: "Care for the people you look after", onPress: go("/family-profiles") },

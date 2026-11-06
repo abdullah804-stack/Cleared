@@ -1,3 +1,4 @@
+export { ErrorBoundary } from "expo-router";
 import { TabPage, ToolRow } from "../../components/TabPage";
 import { TRACK_TOOLS } from "../../constants/tools";
 

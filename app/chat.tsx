@@ -1,6 +1,6 @@
 // app/chat.tsx
 // AI dental assistant. Chat history is kept on the phone only. Calls the Supabase `chat` function with the user's own session token.
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import { ComponentRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeIn, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
@@ -114,14 +114,30 @@ export default function ChatScreen() {
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token ?? SUPABASE_ANON_KEY;
-      const res = await fetch(CHAT_ENDPOINT, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-        // Only the last few turns go to the AI: cheaper, faster, and less personal data leaves the phone.
-        body: JSON.stringify({ messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })) }),
-      });
-      if (res.status === 429) throw new Error("You're asking quickly. Please wait a minute and try again.");
-      const json = await res.json();
+      // The server tries several AI models; we allow it time, and retry once if the connection drops.
+      let res: Response | null = null;
+      let json: any = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 55000);
+        try {
+          res = await fetch(CHAT_ENDPOINT, {
+            method: "POST",
+            signal: ctrl.signal,
+            headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+            // Only the last few turns go to the AI: cheaper, faster, and less personal data leaves the phone.
+            body: JSON.stringify({ messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })) }),
+          });
+          json = await res.json().catch(() => ({}));
+          if (res.status === 429 || res.status === 401 || res.ok) break;
+        } catch (err) {
+          if (attempt === 1) throw err;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      if (!res) throw new Error("empty");
+      if (res.status === 429) throw new Error(json?.error || "You're asking quickly. Please wait a minute and try again.");
       const reply = json?.choices?.[0]?.message?.content?.trim();
       if (!reply) throw new Error(res.status === 401 ? "Please sign in again to use the chat." : json?.error || "empty");
       setMessages((p) => [...p, { id: `${Date.now()}-ai`, role: "assistant", content: reply }]);

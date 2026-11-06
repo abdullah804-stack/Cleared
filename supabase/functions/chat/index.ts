@@ -5,7 +5,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY");
-const MODEL = Deno.env.get("OPENROUTER_MODEL") || "openrouter/free";
+// Tried in order. Free models come and go, so the first one that answers wins.
+// Override with OPENROUTER_MODELS="a,b,c" (comma separated) in Supabase secrets.
+const MODELS = (Deno.env.get("OPENROUTER_MODELS") || Deno.env.get("OPENROUTER_MODEL") || "openrouter/free,meta-llama/llama-3.3-70b-instruct:free,google/gemma-3-27b-it:free,mistralai/mistral-small-3.1-24b-instruct:free")
+  .split(",").map((m) => m.trim()).filter(Boolean);
+const clean = (t: string) => t.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 const MAX_MESSAGES = 12;
 const MAX_CHARS = 600;
 const DAILY_LIMIT = 40;
@@ -48,22 +52,28 @@ serve(async (req) => {
   if (limitErr) return json({ error: "Could not check usage" }, 500);
   if (!allowed) return json({ error: "Daily chat limit reached. Try again tomorrow." }, 429);
 
-  // 4) Ask the model.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${OPENROUTER_KEY}`, "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({ model: MODEL, messages: [{ role: "system", content: SYSTEM }, ...messages], temperature: 0.4, max_tokens: 350 }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return json({ error: "AI request failed" }, 502);
-    return json(data);
-  } catch (e: any) {
-    return json({ error: e?.name === "AbortError" ? "AI took too long" : "Chat failed" }, e?.name === "AbortError" ? 504 : 500);
-  } finally {
-    clearTimeout(timer);
+  // 4) Ask the models one by one until one gives a real answer (free models are often busy or empty).
+  const started = Date.now();
+  for (const model of MODELS) {
+    if (Date.now() - started > 40000) break;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${OPENROUTER_KEY}`, "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM }, ...messages], temperature: 0.4, max_tokens: 500 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const text = clean(String(data?.choices?.[0]?.message?.content ?? ""));
+      if (res.ok && text) return json({ choices: [{ message: { role: "assistant", content: text } }], model });
+      console.log("chat model failed", model, res.status);
+    } catch (e: any) {
+      console.log("chat model error", model, e?.name);
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  return json({ error: "The assistant is busy right now. Please try again in a moment." }, 503);
 });

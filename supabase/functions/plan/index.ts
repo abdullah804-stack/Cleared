@@ -1,10 +1,15 @@
-// @ts-nocheck  (this file runs on Supabase's Deno, not in the app, so the editor's TypeScript can't check it)
 // supabase/functions/plan/index.ts
+// @ts-ignore Deno resolves URL imports; standard TypeScript tooling may not.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+declare const Deno: {
+  env: { get(name: string): string | undefined };
+};
+
 const OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY");
-const MODEL = Deno.env.get("OPENROUTER_MODEL") || "openrouter/free";
-const MAX_INPUT_CHARS = 1500; // stops someone burning your AI credits with huge prompts
+const MODELS = (Deno.env.get("OPENROUTER_MODELS") || Deno.env.get("OPENROUTER_MODEL") || "openrouter/free,meta-llama/llama-3.3-70b-instruct:free,google/gemma-3-27b-it:free")
+  .split(",").map((m) => m.trim()).filter(Boolean);
+const MAX_INPUT_CHARS = 500; // stops someone burning your AI credits with huge prompts
 
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
@@ -53,7 +58,7 @@ Return shape (exactly this):
 }`;
 }
 
-async function callModel(input: string, currency: string, withJsonMode: boolean) {
+async function callModel(input: string, currency: string, withJsonMode: boolean, MODEL: string) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
   try {
@@ -80,7 +85,7 @@ async function callModel(input: string, currency: string, withJsonMode: boolean)
   }
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (!OPENROUTER_KEY) return json({ error: "Server is missing OPENROUTER_API_KEY" }, 500);
 
   let body: { input?: string; currency?: string };
@@ -100,8 +105,8 @@ serve(async (req) => {
     // Free models sometimes return an empty message. Try up to 3 times before giving up.
     const hasContent = (d: any) => typeof d?.choices?.[0]?.message?.content === "string" && d.choices[0].message.content.includes("{");
     let res: Response, data: any;
-    for (let i = 0; i < 3; i++) {
-      ({ res, data } = await callModel(input, currency, i === 0));
+    for (let i = 0; i < 4; i++) {
+      ({ res, data } = await callModel(input, currency, i === 0, MODELS[i % MODELS.length]));
       if (!res.ok && res.status === 400 && i === 0) continue; // this model rejects JSON mode, retry without it
       if (res.ok && hasContent(data)) break;
     }
