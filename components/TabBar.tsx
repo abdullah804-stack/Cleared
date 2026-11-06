@@ -4,13 +4,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Gradient } from "./Gradient";
-import { useThemeColors, glow, gradients } from "../constants/theme";
+import { useThemeColors, glow } from "../constants/theme";
 
 export const TAB_BAR_HEIGHT = 70;
 
-type TabBarProps = {
-  state: { routes: Array<{ name: string; key: string }>; index: number };
+type BottomTabBarProps = {
+  state: { index: number; routes: { key: string; name: string }[] };
   navigation: {
     emit: (event: { type: "tabPress"; target: string; canPreventDefault: true }) => { defaultPrevented: boolean };
     navigate: (name: string) => void;
@@ -34,14 +33,9 @@ function Item({ name, focused, onPress }: { name: string; focused: boolean; onPr
   if (name === "index") {
     return (
       <Pressable onPress={onPress} style={styles.item} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel="Home">
-        <Gradient
-          colors={focused ? gradients.glow : ["#0B2A33", "#071A20"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.home, { borderColor: focused ? "#A5F3FC" : "rgba(34,211,238,0.35)" }, glow(colors.accent, focused ? 0.9 : 0.35)]}
-        >
+        <View style={[styles.home, { backgroundColor: focused ? colors.accent : "#0A2530", borderColor: focused ? "#A5F3FC" : "rgba(34,211,238,0.35)" }, glow(colors.accent, focused ? 0.9 : 0.35)]}>
           <Ionicons name={focused ? meta.on : meta.off} size={27} color={focused ? colors.onAccent : colors.accentStrong} />
-        </Gradient>
+        </View>
         <Text style={labelStyle}>{meta.label}</Text>
       </Pressable>
     );
@@ -58,14 +52,13 @@ function Item({ name, focused, onPress }: { name: string; focused: boolean; onPr
   );
 }
 
-export function TabBar({ state, navigation }: TabBarProps) {
+export function TabBar({ state, navigation }: BottomTabBarProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.bar, { borderColor: "rgba(34,211,238,0.22)", height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
-      <Gradient colors={["rgba(34,211,238,0.10)", "rgba(0,0,0,0)"]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={styles.topGlow} />
-      {state.routes.map((route, i) => {
+      {state.routes.map((route: (typeof state.routes)[number], i: number) => {
         if (!META[route.name]) return null;
         const focused = state.index === i;
         const onPress = () => {

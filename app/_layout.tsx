@@ -2,7 +2,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
 import { initAuditDb } from "../shared/audit";
 import { initJournalDb } from "../shared/journal";
 import { initRoutineDb } from "../shared/routine";
@@ -99,6 +99,19 @@ function RootLayoutNav() {
     </Stack>
   );
 }
+
+// A release build closes the app on any uncaught JS error. Show the message instead, so it can be reported and fixed.
+try {
+  const EU = (globalThis as any).ErrorUtils;
+  const previous = EU?.getGlobalHandler?.();
+  EU?.setGlobalHandler?.((error: any, isFatal?: boolean) => {
+    try {
+      Alert.alert("Something went wrong", `${error?.name ?? "Error"}: ${error?.message ?? String(error)}`.slice(0, 600));
+    } catch {
+      previous?.(error, isFatal);
+    }
+  });
+} catch {}
 
 export default function RootLayout() {
   useEffect(() => {

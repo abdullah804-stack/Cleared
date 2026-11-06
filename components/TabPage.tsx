@@ -1,24 +1,24 @@
 // components/TabPage.tsx
-// Shared frame for the Care / Track / Help / More tabs: glowing title header, tool rows, and a chat button.
+// Shared frame for the Care / Track / Help / More tabs: title header, tool rows, and a chat button.
+// Deliberately built from plain views (no SVG, no animation) so these screens cannot crash on switch.
 import { ReactNode, useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Gradient, RadialGlow } from "./Gradient";
 import { Card } from "./Card";
-import { useThemeColors, ThemeColors, glow, gradients, radius, spacing, type } from "../constants/theme";
+import { useThemeColors, ThemeColors, spacing } from "../constants/theme";
 import type { Tool, IconName } from "../constants/tools";
 
-export function ToolRow({ tool, index = 0 }: { tool: Tool; index?: number }) {
+export function ToolRow({ tool }: { tool: Tool; index?: number }) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   return (
     <View style={{ marginBottom: spacing.sm + 2 }}>
       <Card onPress={() => router.push(tool.path as any)} accessibilityLabel={`${tool.title}. ${tool.sub}`} style={styles.row}>
-        <View style={[styles.icon, { backgroundColor: `${tool.tint}1A`, borderColor: `${tool.tint}55` }, glow(tool.tint, 0.35)]}>
+        <View style={[styles.icon, { backgroundColor: `${tool.tint}1A`, borderColor: `${tool.tint}55` }]}>
           <Ionicons name={tool.icon} size={22} color={tool.tint} />
         </View>
         <View style={{ flex: 1 }}>
@@ -31,7 +31,7 @@ export function ToolRow({ tool, index = 0 }: { tool: Tool; index?: number }) {
   );
 }
 
-/** Floating "ask the AI" button with a breathing glow. */
+/** Floating "ask the AI" button. */
 export function ChatFab({ bottom }: { bottom: number }) {
   const colors = useThemeColors();
   const router = useRouter();
@@ -46,9 +46,9 @@ export function ChatFab({ bottom }: { bottom: number }) {
         accessibilityRole="button"
         accessibilityLabel="Ask Cleared AI"
       >
-        <Gradient colors={gradients.glow} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[{ width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" }, glow(colors.accent, 0.8)]}>
+        <View style={{ width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent }}>
           <Ionicons name="chatbubble-ellipses" size={26} color={colors.onAccent} />
-        </Gradient>
+        </View>
       </Pressable>
     </View>
   );
@@ -63,18 +63,17 @@ export function TabPage({ title, subtitle, icon, tint, children, fab = true }: {
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 96 }} showsVerticalScrollIndicator={false}>
-        <Gradient colors={gradients.hero} style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
-          <RadialGlow color={accent} size={300} opacity={0.35} style={{ position: "absolute", top: -140, right: -90 }} />
+        <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
           <View style={styles.headRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heading}>{title}</Text>
               <Text style={styles.headSub}>{subtitle}</Text>
             </View>
-            <View style={[styles.headIcon, { borderColor: `${accent}66`, backgroundColor: `${accent}1A` }, glow(accent, 0.6)]}>
+            <View style={[styles.headIcon, { borderColor: `${accent}66`, backgroundColor: `${accent}1A` }]}>
               <Ionicons name={icon} size={26} color={accent} />
             </View>
           </View>
-        </Gradient>
+        </View>
         <View style={styles.body}>{children}</View>
       </ScrollView>
       {fab && <ChatFab bottom={spacing.md} />}
@@ -84,7 +83,7 @@ export function TabPage({ title, subtitle, icon, tint, children, fab = true }: {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    header: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+    header: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, backgroundColor: "#06141B", borderBottomWidth: 1, borderColor: "rgba(34,211,238,0.25)" },
     headRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
     heading: { fontSize: 32, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.9 },
     headSub: { fontSize: 14.5, lineHeight: 20, color: "rgba(255,255,255,0.65)", marginTop: 3 },

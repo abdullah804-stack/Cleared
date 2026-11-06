@@ -161,6 +161,16 @@ export default function HomeScreen() {
             </Animated.View>
           </Gradient>
 
+          {/* ── Dentist's tips ─────────────────────── */}
+          <Animated.View entering={enter(2)} style={{ marginTop: spacing.lg }}>
+            <Card>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.text }}>Dentist's tip</Text>
+              <Text style={{ fontSize: 13, lineHeight: 19, color: colors.textMuted, marginTop: spacing.xs }}>
+                Brush gently for two minutes, twice a day, and remember to clean between your teeth.
+              </Text>
+            </Card>
+          </Animated.View>
+
           {/* ── Streak ─────────────────────────────── */}
           <Animated.View entering={enter(3)} style={{ paddingHorizontal: spacing.md, marginTop: spacing.lg }}>
             <TodayCard />
@@ -195,13 +205,23 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.chips}>
-                  {PROBLEM_CHIPS.slice(0, 6).map((chip) => (
-                    <Pressable key={chip.label} onPress={() => handlePlan(chip.label)} style={[styles.chip, { borderColor: `${chip.tint}55` }]} accessibilityRole="button" accessibilityLabel={`Start a plan for ${chip.label}`}>
-                      <Ionicons name={chip.icon} size={15} color={chip.tint} />
-                      <Text style={styles.chipText}>{chip.label}</Text>
-                    </Pressable>
-                  ))}
+              <View style={styles.divider} />
+              <Text style={styles.pickLabel}>OR PICK A COMMON PROBLEM</Text>
+              <View style={styles.grid}>
+                {PROBLEM_CHIPS.slice(0, 6).map((chip) => (
+                  <Pressable
+                    key={chip.label}
+                    onPress={() => handlePlan(chip.label)}
+                    style={({ pressed }) => [styles.tile, { borderColor: `${chip.tint}40`, opacity: pressed ? 0.8 : 1 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Start a plan for ${chip.label}`}
+                  >
+                    <View style={[styles.tileIcon, { backgroundColor: `${chip.tint}1F`, borderColor: `${chip.tint}55` }]}>
+                      <Ionicons name={chip.icon} size={20} color={chip.tint} />
+                    </View>
+                    <Text style={styles.tileText} numberOfLines={1}>{chip.label}</Text>
+                  </Pressable>
+                ))}
               </View>
             </Card>
           </Animated.View>
@@ -252,9 +272,12 @@ const createStyles = (colors: ThemeColors) =>
     inputBox: { borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
     input: { fontSize: 16, lineHeight: 23, color: colors.text, minHeight: 72, padding: 0 },
     askFooter: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, marginTop: spacing.md },
-    chips: { paddingTop: spacing.md, flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-    chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, paddingVertical: 9, borderRadius: radius.full, borderWidth: 1, backgroundColor: colors.surfaceAlt },
-    chipText: { fontSize: 13.5, fontWeight: "600", color: colors.text },
+    divider: { height: 1, backgroundColor: colors.border, marginTop: spacing.md + 2 },
+    pickLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 1.2, color: colors.textMuted, marginTop: spacing.md, marginBottom: spacing.sm + 2 },
+    grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: spacing.sm },
+    tile: { width: "31.5%", alignItems: "center", paddingVertical: 12, paddingHorizontal: 6, borderRadius: radius.md, borderWidth: 1, backgroundColor: colors.surfaceAlt },
+    tileIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, marginBottom: 7 },
+    tileText: { fontSize: 12.5, fontWeight: "700", color: colors.text },
 
     footnote: { ...type.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.xl, paddingHorizontal: spacing.xl },
   });
