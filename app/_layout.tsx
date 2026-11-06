@@ -106,7 +106,7 @@ try {
   const previous = EU?.getGlobalHandler?.();
   EU?.setGlobalHandler?.((error: any, isFatal?: boolean) => {
     try {
-      Alert.alert("Something went wrong", `${error?.name ?? "Error"}: ${error?.message ?? String(error)}`.slice(0, 600));
+      Alert.alert("Something went wrong", `${error?.name ?? "Error"}: ${error?.message ?? String(error)}\n\n${String(error?.stack ?? "").split("\n").slice(0, 6).join("\n")}`.slice(0, 900));
     } catch {
       previous?.(error, isFatal);
     }

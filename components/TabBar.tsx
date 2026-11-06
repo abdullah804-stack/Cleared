@@ -1,22 +1,19 @@
 // components/TabBar.tsx
 // Black bar with rounded glowing top, a glowing pill behind the active tab, and a raised Home button.
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors, glow } from "../constants/theme";
 
 export const TAB_BAR_HEIGHT = 70;
 
-type BottomTabBarProps = {
-  state: { index: number; routes: { key: string; name: string }[] };
-  navigation: {
-    emit: (event: { type: "tabPress"; target: string; canPreventDefault: true }) => { defaultPrevented: boolean };
-    navigate: (name: string) => void;
-  };
+type IconName = keyof typeof Ionicons.glyphMap;
+type TabBarProps = {
+  state: { index: number; routes: Array<{ key: string; name: string }> };
+  navigation: { navigate: (name: string) => void };
 };
 
-type IconName = keyof typeof Ionicons.glyphMap;
 const META: Record<string, { label: string; off: IconName; on: IconName }> = {
   care: { label: "Care", off: "heart-outline", on: "heart" },
   track: { label: "Track", off: "pulse-outline", on: "pulse" },
@@ -52,19 +49,26 @@ function Item({ name, focused, onPress }: { name: string; focused: boolean; onPr
   );
 }
 
-export function TabBar({ state, navigation }: BottomTabBarProps) {
+export function TabBar({ state, navigation }: TabBarProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   return (
     <View style={[styles.bar, { borderColor: "rgba(34,211,238,0.22)", height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
-      {state.routes.map((route: (typeof state.routes)[number], i: number) => {
+      {state.routes.map((route, i: number) => {
         if (!META[route.name]) return null;
         const focused = state.index === i;
         const onPress = () => {
-          Haptics.selectionAsync().catch(() => {});
-          const e = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-          if (!focused && !e.defaultPrevented) navigation.navigate(route.name as never);
+          if (focused) return;
+          // Go through the router: it is the same thing a link does, and it cannot depend on tab-bar internals.
+          try {
+            router.navigate((route.name === "index" ? "/" : `/${route.name}`) as any);
+          } catch {
+            try {
+              navigation.navigate(route.name as never);
+            } catch {}
+          }
         };
         return <Item key={route.key} name={route.name} focused={focused} onPress={onPress} />;
       })}

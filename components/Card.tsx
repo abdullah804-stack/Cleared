@@ -3,7 +3,6 @@
 import { ReactNode } from "react";
 import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
 import { useThemeColors, radius, spacing, shadows, motion } from "../constants/theme";
 
 // Style keys that position the card inside its parent. When the card is tappable these must go on the
@@ -66,7 +65,6 @@ export function Card({
         onPressIn={() => (scale.value = withSpring(0.97, motion.press))}
         onPressOut={() => (scale.value = withSpring(1, motion.press))}
         onPress={() => {
-          Haptics.selectionAsync().catch(() => {});
           onPress();
         }}
         style={[styles.card, surface, padded && styles.padded, inner]}
