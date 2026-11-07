@@ -2,9 +2,9 @@
 // Chat entry on the home screen: a friendly preview, quick questions and an input that opens the full chat.
 import { useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { tick } from "../utils/haptics";
 import { Card } from "./Card";
 import { useThemeColors, ThemeColors, glow, radius, spacing } from "../constants/theme";
 
@@ -17,11 +17,10 @@ export function HomeChat() {
   const [text, setText] = useState("");
 
   const open = (q?: string) => {
-    Haptics.selectionAsync().catch(() => {});
+    tick();
     const question = (q ?? text).trim();
     setText("");
-    const destination = question ? { pathname: "/chat", params: { q: question } } : "/chat";
-    router.push(destination as unknown as Href);
+    router.push({ pathname: "/chat", params: question ? { q: question } : undefined } as never);
   };
 
   return (

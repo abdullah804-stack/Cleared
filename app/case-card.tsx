@@ -5,7 +5,7 @@ import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet,
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
+import { thud } from "../utils/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Screen } from "../components/Screen";
@@ -53,7 +53,7 @@ export default function CaseCardScreen() {
 
   const send = async () => {
     if (!valid) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    thud();
     AsyncStorage.setItem("case_card_phone", phone).catch(() => {});
 
     const lines = [
@@ -125,7 +125,7 @@ export default function CaseCardScreen() {
               </View>
             </View>
             {!profile?.allergies?.trim() && (
-              <Text style={styles.nudge} onPress={() => router.push("/dental-profile" as any)}>
+              <Text style={styles.nudge} onPress={() => router.push("/dental-profile" as never)}>
                 Add your allergies and medications so the clinic sees them. Tap to edit.
               </Text>
             )}

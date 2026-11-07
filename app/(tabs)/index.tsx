@@ -6,7 +6,7 @@ import { useRouter } from "expo-router";
 import Animated, { FadeInDown, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import { thud } from "../../utils/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
@@ -101,7 +101,7 @@ export default function HomeScreen() {
   useSpeechRecognitionEvent("result", (event: any) => setInput(event.results[0]?.transcript || ""));
 
   const toggleListening = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    thud();
     if (!ExpoSpeechRecognitionModule) return Alert.alert("Not Available", "Voice requires the APK build.");
     if (isListening) {
       ExpoSpeechRecognitionModule.stop();
@@ -115,7 +115,7 @@ export default function HomeScreen() {
   const handlePlan = (customText?: string) => {
     const text = customText || input;
     if (!text.trim()) return;
-    router.push({ pathname: "/triage" as any, params: { request: text } });
+    router.push({ pathname: "/triage", params: { request: text } } as never);
   };
 
   const enter = (i: number) => FadeInDown.delay(60 + i * 70).duration(480);
@@ -160,16 +160,6 @@ export default function HomeScreen() {
               ))}
             </Animated.View>
           </Gradient>
-
-          {/* ── Dentist's tips ─────────────────────── */}
-          <Animated.View entering={enter(2)} style={{ marginTop: spacing.lg }}>
-            <Card>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.text }}>Dentist's tip</Text>
-              <Text style={{ fontSize: 13, lineHeight: 19, color: colors.textMuted, marginTop: spacing.xs }}>
-                Brush gently for two minutes, twice a day, and remember to clean between your teeth.
-              </Text>
-            </Card>
-          </Animated.View>
 
           {/* ── Streak ─────────────────────────────── */}
           <Animated.View entering={enter(3)} style={{ paddingHorizontal: spacing.md, marginTop: spacing.lg }}>

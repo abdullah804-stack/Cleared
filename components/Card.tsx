@@ -3,6 +3,7 @@
 import { ReactNode } from "react";
 import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { tick } from "../utils/haptics";
 import { useThemeColors, radius, spacing, shadows, motion } from "../constants/theme";
 
 // Style keys that position the card inside its parent. When the card is tappable these must go on the
@@ -38,18 +39,20 @@ export function Card({
   const scale = useSharedValue(1);
   const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  const bg = (StyleSheet.flatten(style) as any)?.backgroundColor;
-  const isTransparent = typeof bg === "string" && (/^rgba/i.test(bg) || /^#[0-9a-f]{8}$/i.test(bg));
-
-  const surface: ViewStyle = {
+  let surface: ViewStyle = {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     ...shadows.sm,
     shadowColor: colors.accent, // a faint cyan halo on the black canvas
-    shadowOpacity: isTransparent ? 0 : 0.12,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
-    ...(isTransparent ? { elevation: 0 } : {}),
   };
+
+  // A see-through card with an Android shadow shows a dark box behind its content. Drop the shadow in that case.
+  const bg = (StyleSheet.flatten(style) as any)?.backgroundColor;
+  if (typeof bg === "string" && (/^rgba/i.test(bg) || /^#[0-9a-f]{8}$/i.test(bg))) {
+    surface = { ...surface, elevation: 0, shadowOpacity: 0 };
+  }
 
   if (!onPress) {
     return <View style={[styles.card, surface, padded && styles.padded, style]}>{children}</View>;
@@ -65,6 +68,7 @@ export function Card({
         onPressIn={() => (scale.value = withSpring(0.97, motion.press))}
         onPressOut={() => (scale.value = withSpring(1, motion.press))}
         onPress={() => {
+          tick();
           onPress();
         }}
         style={[styles.card, surface, padded && styles.padded, inner]}

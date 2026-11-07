@@ -2,7 +2,7 @@
 import { ComponentProps, ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
+import { tap } from "../utils/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Gradient } from "./Gradient";
 import { useThemeColors, radius, spacing, glow, gradients, motion } from "../constants/theme";
@@ -76,7 +76,7 @@ export function Button({
         onPressIn={() => (scale.value = withSpring(0.97, motion.press))}
         onPressOut={() => (scale.value = withSpring(1, motion.press))}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          tap();
           onPress();
         }}
       >

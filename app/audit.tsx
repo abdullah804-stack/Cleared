@@ -2,7 +2,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, Text, View, ScrollView, Pressable, Alert, Platform } from "react-native";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
+import { tick } from "../utils/haptics";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "../components/Screen";
@@ -86,7 +86,7 @@ export default function AuditScreen() {
               <Pressable
                 style={({ pressed }) => [styles.row, pressed && { opacity: 0.9 }]}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  tick();
                   setExpandedId(isExpanded ? null : entry.id);
                 }}
                 accessibilityRole="button"

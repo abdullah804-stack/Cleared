@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 
-export function Marquee({ children, speed = 28, gap = 10, direction = "right" }: { children: ReactNode; speed?: number; gap?: number; direction?: "left" | "right" }) {
+export function Marquee({ children, speed = 28, gap = 10, direction = "right", height }: { children: ReactNode; speed?: number; gap?: number; direction?: "left" | "right"; height?: number }) {
   const [w, setW] = useState(0);
   const x = useSharedValue(0);
 
@@ -19,13 +19,15 @@ export function Marquee({ children, speed = 28, gap = 10, direction = "right" }:
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
 
   return (
-    <ScrollView horizontal scrollEnabled={false} showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-      <Animated.View style={[{ flexDirection: "row" }, style]}>
+    <View style={{ height, overflow: "hidden" }}>
+    <ScrollView horizontal scrollEnabled={false} showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ alignItems: "flex-start" }}>
+      <Animated.View style={[{ flexDirection: "row", alignItems: "flex-start" }, style]}>
         <View style={{ flexDirection: "row", gap, paddingRight: gap }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
           {children}
         </View>
         <View style={{ flexDirection: "row", gap, paddingRight: gap }}>{children}</View>
       </Animated.View>
     </ScrollView>
+    </View>
   );
 }

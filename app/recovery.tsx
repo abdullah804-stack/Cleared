@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import Animated, { Easing, FadeInDown, ZoomIn, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
+import { tap } from "../utils/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Screen } from "../components/Screen";
@@ -46,7 +46,7 @@ export default function RecoveryScreen() {
   const barStyle = useAnimatedStyle(() => ({ width: `${bar.value * 100}%` }));
 
   const handleToggle = async (day: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    tap();
     const newState = !progress[day];
     setProgress((p) => ({ ...p, [day]: newState }));
     await toggleRecoveryDay(day, newState);

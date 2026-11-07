@@ -3,17 +3,18 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { tick } from "../utils/haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors, glow } from "../constants/theme";
 
 export const TAB_BAR_HEIGHT = 70;
 
-type IconName = keyof typeof Ionicons.glyphMap;
 type TabBarProps = {
-  state: { index: number; routes: Array<{ key: string; name: string }> };
-  navigation: { navigate: (name: string) => void };
+  state: { routes: Array<{ key: string; name: string }>; index: number };
+  navigation: { navigate: (...args: any[]) => unknown };
 };
 
+type IconName = keyof typeof Ionicons.glyphMap;
 const META: Record<string, { label: string; off: IconName; on: IconName }> = {
   care: { label: "Care", off: "heart-outline", on: "heart" },
   track: { label: "Track", off: "pulse-outline", on: "pulse" },
@@ -56,10 +57,11 @@ export function TabBar({ state, navigation }: TabBarProps) {
 
   return (
     <View style={[styles.bar, { borderColor: "rgba(34,211,238,0.22)", height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
-      {state.routes.map((route, i: number) => {
+      {state.routes.map((route, i) => {
         if (!META[route.name]) return null;
         const focused = state.index === i;
         const onPress = () => {
+          tick();
           if (focused) return;
           // Go through the router: it is the same thing a link does, and it cannot depend on tab-bar internals.
           try {

@@ -1,11 +1,11 @@
 // app/chat.tsx
 // AI dental assistant. Chat history is kept on the phone only. Calls the Supabase `chat` function with the user's own session token.
-import { ComponentRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeIn, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
+import { tap } from "../utils/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Screen } from "../components/Screen";
@@ -16,7 +16,6 @@ import { isEmergency } from "../constants/emergency";
 import { supabase } from "../contexts/AuthContext";
 
 type Message = { id: string; role: "user" | "assistant"; content: string };
-
 const WELCOME: Message = {
   id: "welcome",
   role: "assistant",
@@ -48,7 +47,7 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [urgent, setUrgent] = useState(false);
-  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+  const scroller = useRef<any>(null);
   const loaded = useRef(false);
 
   // Load saved chat once.
@@ -101,7 +100,7 @@ export default function ChatScreen() {
   const send = async (custom?: string) => {
     const text = (custom ?? input).trim();
     if (!text || loading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    tap();
 
     if (isEmergency(text)) setUrgent(true);
     const userMsg: Message = { id: `${Date.now()}`, role: "user", content: text };
@@ -124,7 +123,11 @@ export default function ChatScreen() {
           res = await fetch(CHAT_ENDPOINT, {
             method: "POST",
             signal: ctrl.signal,
-            headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+            headers: {
+              Authorization: "Bearer " + token,
+              apikey: SUPABASE_ANON_KEY,
+              "Content-Type": "application/json",
+            },
             // Only the last few turns go to the AI: cheaper, faster, and less personal data leaves the phone.
             body: JSON.stringify({ messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })) }),
           });

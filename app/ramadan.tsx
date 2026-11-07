@@ -5,7 +5,7 @@ import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View 
 import Animated, { FadeInDown } from "react-native-reanimated";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
+import { tick } from "../utils/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Screen } from "../components/Screen";
@@ -79,7 +79,7 @@ export default function RamadanScreen() {
   };
 
   const toggle = (on: boolean) => {
-    Haptics.selectionAsync().catch(() => {});
+    tick();
     apply({ ...s, on });
   };
 

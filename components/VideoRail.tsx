@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { tick } from "../utils/haptics";
 import { Gradient } from "./Gradient";
 import { useThemeColors, ThemeColors, glow, radius, spacing } from "../constants/theme";
 import { VIDEOS } from "../constants/tools";
@@ -13,7 +13,7 @@ function VideoCard({ v, styles, colors }: { v: (typeof VIDEOS)[number]; styles: 
   return (
     <Pressable
       onPress={() => {
-        Haptics.selectionAsync().catch(() => {});
+        tick();
         Linking.openURL(`https://www.youtube.com/watch?v=${v.id}`).catch(() => {});
       }}
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}

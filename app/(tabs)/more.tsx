@@ -5,7 +5,7 @@ import { ReactNode, useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
-import * as Haptics from "expo-haptics";
+import { tick } from "../../utils/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { TabPage } from "../../components/TabPage";
 import { Card } from "../../components/Card";
@@ -47,7 +47,7 @@ export default function MoreTab() {
           <Pressable
             key={r.title}
             onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
+              tick();
               r.onPress();
             }}
             style={({ pressed }) => [styles.item, i > 0 && styles.itemBorder, pressed && { backgroundColor: colors.surfaceAlt }]}

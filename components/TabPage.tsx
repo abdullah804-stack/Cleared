@@ -5,6 +5,7 @@ import { ReactNode, useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { thud } from "../utils/haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card } from "./Card";
 import { useThemeColors, ThemeColors, spacing } from "../constants/theme";
@@ -39,6 +40,7 @@ export function ChatFab({ bottom }: { bottom: number }) {
       <View pointerEvents="none" style={{ position: "absolute", width: 66, height: 66, left: -5, top: -5, borderRadius: 33, backgroundColor: colors.accent, opacity: 0.16 }} />
       <Pressable
         onPress={() => {
+          thud();
           router.push("/chat" as any);
         }}
         accessibilityRole="button"
