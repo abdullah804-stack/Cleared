@@ -32,17 +32,7 @@ interface Clinic {
   address?: string;
   lat?: number;
   lon?: number;
-  distanceKm?: number; // from the phone's location, when known
   demo?: boolean; // true = made-up placeholder clinic
-}
-
-/** Straight-line distance in km between two coordinates. */
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const rad = (d: number) => (d * Math.PI) / 180;
-  const a =
-    Math.sin(rad(lat2 - lat1) / 2) ** 2 +
-    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1) / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // Placeholder clinics used when GPS/search fails. They are NOT real businesses.
@@ -61,14 +51,6 @@ function pickClinic(args: Record<string, any>): Clinic {
   const wantedName = typeof args.clinic_name === "string" ? args.clinic_name.toLowerCase() : null;
   const byRef = pool.find((c) => c.id === wantedId || (wantedName && c.name.toLowerCase() === wantedName));
   if (byRef) return byRef;
-
-  // The plan screen's Cheapest / Closest buttons set args.priority on the booking step.
-  if (args.priority === "cheapest") {
-    return [...pool].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity))[0];
-  }
-  if (args.priority === "closest") {
-    return [...pool].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))[0];
-  }
 
   const maxPrice = Number(args.max_price);
   if (Number.isFinite(maxPrice) && maxPrice > 0) {
@@ -142,13 +124,8 @@ export async function executeTool(
               address: address || undefined,
               lat: el.lat,
               lon: el.lon,
-              distanceKm:
-                typeof el.lat === "number" && typeof el.lon === "number"
-                  ? Math.round(haversineKm(loc.coords.latitude, loc.coords.longitude, el.lat, el.lon) * 10) / 10
-                  : undefined,
             } as Clinic;
           });
-          clinics.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity)); // nearest first
           lastClinics = clinics;
           return { ok: true, output: JSON.stringify(clinics) };
         } catch {
@@ -177,26 +154,25 @@ export async function executeTool(
         when.setDate(when.getDate() + 1);
         when.setHours(slot.hour, 0, 0, 0);
 
-        // "Fastest": if there is still room today (2+ hours from now, before 8 PM), book the next free hour today.
-        if (args.priority === "fastest") {
-          const soon = new Date(Date.now() + 2 * 60 * 60 * 1000);
-          soon.setMinutes(0, 0, 0);
-          soon.setHours(soon.getHours() + 1);
-          if (soon.getHours() >= 9 && soon.getHours() <= 20 && soon.getDate() === new Date().getDate()) {
-            when.setTime(soon.getTime());
-          }
-        }
-
         if (userId) {
           // The result used to be ignored, so a failed save still showed "Booked Successfully".
           const row = { user_id: userId, user_email: userEmail || null, clinic_name: clinic.name, appointment_time: when.toISOString() };
-          let { error } = await supabase.from("appointments").insert(row);
-          // Right after a database change, Supabase can briefly answer "schema cache" errors. Wait a moment and try again.
-          for (let i = 0; error && /schema cache|PGRST20[0-9]/i.test(`${error.code ?? ""} ${error.message}`) && i < 2; i++) {
-            await new Promise((r) => setTimeout(r, 1500));
+          let error: { message: string } | null = null;
+          // After a database change the API can take a few seconds to notice; retry quietly before giving up.
+          for (let attempt = 0; attempt < 4; attempt++) {
             ({ error } = await supabase.from("appointments").insert(row));
+            if (!error || !/schema cache|could not find/i.test(error.message)) break;
+            await delay(1500 * (attempt + 1));
           }
-          if (error) return { ok: false, error: `Couldn't save your booking (${error.message}).` };
+          if (error) {
+            const stale = /schema cache|could not find/i.test(error.message);
+            return {
+              ok: false,
+              error: stale
+                ? "Booking storage isn't set up yet. In Supabase, run supabase/appointments_fix.sql once, then tap Retry step."
+                : `Couldn't save your booking (${error.message}).`,
+            };
+          }
         }
 
         let alerts = 0;
@@ -204,19 +180,6 @@ export async function executeTool(
           alerts = await scheduleAppointmentAlerts(when, clinic.name);
         } catch {
           // Reminders are a bonus; never fail the booking because of them.
-        }
-
-        // Confirmation email to the signed-in user (best effort, never fails the booking).
-        if (userId && userEmail) {
-          try {
-            await withTimeout(
-              supabase.functions.invoke("send-reminder", {
-                body: { clinic_name: clinic.name, time: when.toLocaleString(), demo: !!clinic.demo },
-              }),
-              8000,
-              "Email"
-            );
-          } catch {}
         }
 
         return {
